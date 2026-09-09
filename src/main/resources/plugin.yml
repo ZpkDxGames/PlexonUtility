@@ -1,0 +1,54 @@
+name: PlexonUtility
+version: '${project.version}'
+main: com.zpkdxgames.plexonutility.PlexonUtilityPlugin
+api-version: '26.2'
+depend:
+  - PlexonCore
+loadbefore:
+  - Essentials
+commands:
+  feed:
+    description: Restore hunger and saturation.
+    usage: /feed [player]
+    aliases: [pfeed]
+    permission: plexonutility.feed
+  heal:
+    description: Restore health and clear fire.
+    usage: /heal [player]
+    aliases: [pheal]
+    permission: plexonutility.heal
+  enderchest:
+    description: Open your or another online player's Ender Chest.
+    usage: /enderchest [player]
+    aliases: [ec, pec]
+    permission: plexonutility.enderchest
+  workbench:
+    description: Open a virtual crafting table.
+    usage: /workbench
+    aliases: [wb, pworkbench]
+    permission: plexonutility.workbench
+  utilityadmin:
+    description: PlexonUtility diagnostics and reload.
+    usage: /utilityadmin <diagnostics|reload>
+    permission: plexonutility.admin
+permissions:
+  plexonutility.feed:
+    default: true
+  plexonutility.feed.others:
+    default: op
+  plexonutility.feed.cooldown.bypass:
+    default: op
+  plexonutility.heal:
+    default: true
+  plexonutility.heal.others:
+    default: op
+  plexonutility.heal.cooldown.bypass:
+    default: op
+  plexonutility.enderchest:
+    default: true
+  plexonutility.enderchest.others:
+    default: op
+  plexonutility.workbench:
+    default: true
+  plexonutility.admin:
+    default: op

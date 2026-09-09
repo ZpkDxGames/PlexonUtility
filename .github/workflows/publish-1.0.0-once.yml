@@ -1,0 +1,159 @@
+name: Publish PlexonUtility 1.0.0 Once
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: plexonutility-1.0.0-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Stop if immutable release already exists
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v1.0.0 >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v1.0.0 already exists; immutable release will not be replaced."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Java 25
+        if: steps.existing.outputs.exists != 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Resolve and verify project version
+        if: steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          test "$VERSION" = "1.0.0"
+          test -f releases/1.0.0.md
+
+      - name: Provision immutable PlexonCore 2.0.0
+        if: steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          core_jar="${RUNNER_TEMP}/PlexonCore-2.0.0.jar"
+          curl --fail --location --silent --show-error \
+            --output "$core_jar" \
+            "https://github.com/ZpkDxGames/PlexonCore/releases/download/v2.0.0/PlexonCore-2.0.0.jar"
+          echo "179b82ce7fd82e3095b3a6d0d893af6d7c97f91bd7ce403e96d7f3581462dfec  $core_jar" | sha256sum --check
+          mvn -B -ntp org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
+            -Dfile="$core_jar" \
+            -DgroupId=com.zpkdxgames \
+            -DartifactId=PlexonCore \
+            -Dversion=2.0.0 \
+            -Dpackaging=jar \
+            -DgeneratePom=true
+
+      - name: Verify release build
+        if: steps.existing.outputs.exists != 'true'
+        run: mvn -B -ntp clean verify
+
+      - name: Require every discovered test to run
+        if: steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          count = 0
+          skipped = []
+          for path in sorted(glob.glob('target/surefire-reports/TEST-*.xml')):
+              for case in ET.parse(path).getroot().iter('testcase'):
+                  count += 1
+                  if case.find('skipped') is not None:
+                      skipped.append((case.get('classname'), case.get('name')))
+          if count == 0:
+              print('No tests were discovered')
+              sys.exit(1)
+          if skipped:
+              print(f'Skipped tests are not allowed: {skipped}')
+              sys.exit(1)
+          print(f'All release tests ran: {count}')
+          PY
+
+      - name: Verify release distribution and checksum
+        if: steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAR="target/PlexonUtility-1.0.0.jar"
+          test -s "$JAR"
+          jar tf "$JAR" > target/jar-contents.txt
+          grep -qx 'plugin.yml' target/jar-contents.txt
+          grep -qx 'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' target/jar-contents.txt
+          grep -qx 'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' target/jar-contents.txt
+          unzip -p "$JAR" plugin.yml | grep -F "version: '1.0.0'"
+          unzip -p "$JAR" plugin.yml | grep -F "api-version: '26.2'"
+          unzip -p "$JAR" META-INF/MANIFEST.MF | tr -d '\r' | grep -F 'Implementation-Version: 1.0.0'
+          javap -verbose -classpath "$JAR" com.zpkdxgames.plexonutility.PlexonUtilityPlugin | grep -F 'major version: 69'
+          if grep -q '^com/zpkdxgames/plexoncore/' target/jar-contents.txt; then
+            echo "PlexonCore runtime classes must not be shaded into PlexonUtility" >&2
+            exit 1
+          fi
+          if grep -q '^io/papermc/' target/jar-contents.txt || grep -q '^org/bukkit/' target/jar-contents.txt; then
+            echo "Paper/Bukkit runtime classes must not be bundled into PlexonUtility" >&2
+            exit 1
+          fi
+          (
+            cd target
+            sha256sum PlexonUtility-1.0.0.jar > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
+          )
+
+      - name: Tag released commit
+        if: steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin refs/tags/v1.0.0 >/dev/null 2>&1; then
+            echo "Tag v1.0.0 already exists without a release; refusing to move it." >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a v1.0.0 "$GITHUB_SHA" -m "PlexonUtility 1.0.0"
+          git push origin v1.0.0
+
+      - name: Publish GitHub release
+        if: steps.existing.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v1.0.0 \
+            target/PlexonUtility-1.0.0.jar \
+            target/SHA256SUMS.txt \
+            --verify-tag \
+            --title "PlexonUtility 1.0.0" \
+            --notes-file releases/1.0.0.md
