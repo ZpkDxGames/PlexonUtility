@@ -22,7 +22,10 @@ public record UtilityConfig(
         boolean claimStandardCommands) {
 
     public UtilityConfig {
-        enabledFeatures = Collections.unmodifiableSet(EnumSet.copyOf(enabledFeatures));
+        EnumSet<Feature> featureCopy = enabledFeatures.isEmpty()
+                ? EnumSet.noneOf(Feature.class)
+                : EnumSet.copyOf(enabledFeatures);
+        enabledFeatures = Collections.unmodifiableSet(featureCopy);
         healNegativeEffects = Collections.unmodifiableSet(new LinkedHashSet<>(healNegativeEffects));
     }
 
