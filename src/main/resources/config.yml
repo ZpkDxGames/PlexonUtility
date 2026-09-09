@@ -1,0 +1,31 @@
+features:
+  feed: true
+  heal: true
+  enderchest: true
+  workbench: true
+
+feed:
+  food-level: 20
+  saturation: 20.0
+  reset-exhaustion: true
+  cooldown-seconds: 0
+
+heal:
+  clear-fire: true
+  clear-negative-effects: false
+  negative-effects:
+    - POISON
+    - WITHER
+    - BLINDNESS
+    - NAUSEA
+    - SLOWNESS
+    - WEAKNESS
+    - MINING_FATIGUE
+    - HUNGER
+    - DARKNESS
+  cooldown-seconds: 0
+
+migration:
+  # PlexonUtility owns these command labels when loaded. Keep Essentials backed up
+  # until the production command/Vault/dependency audit is complete.
+  claim-standard-commands: true
