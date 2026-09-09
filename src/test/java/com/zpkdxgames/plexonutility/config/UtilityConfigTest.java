@@ -33,6 +33,16 @@ class UtilityConfigTest {
     }
 
     @Test
+    void allowsEveryFeatureToBeDisabled() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        for (Feature feature : Feature.values()) yaml.set("features." + feature.id(), false);
+
+        UtilityConfig config = UtilityConfig.from(yaml);
+
+        assertTrue(config.enabledFeatures().isEmpty());
+    }
+
+    @Test
     void rejectsUnreasonableCooldown() {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("feed.cooldown-seconds", 86_401L);
