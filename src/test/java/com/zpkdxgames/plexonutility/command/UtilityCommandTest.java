@@ -4,8 +4,6 @@ import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.cooldown.CooldownService;
 import com.zpkdxgames.plexonutility.feature.Feature;
 import com.zpkdxgames.plexonutility.message.MessageService;
-import org.bukkit.attribute.Attribute;
-import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -16,6 +14,8 @@ import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.ToDoubleFunction;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -71,11 +71,8 @@ class UtilityCommandTest {
     void healUsesActualMaxHealthAndClearsFire() {
         Player player = player("Alex");
         when(player.isValid()).thenReturn(true);
-        AttributeInstance maxHealth = mock(AttributeInstance.class);
-        when(maxHealth.getValue()).thenReturn(40.0D);
-        when(player.getAttribute(Attribute.MAX_HEALTH)).thenReturn(maxHealth);
         MessageService messages = mock(MessageService.class);
-        UtilityCommand executor = executor(config(0L, 0L), messages, ignored -> null);
+        UtilityCommand executor = executor(config(0L, 0L), messages, ignored -> null, ignored -> 40.0D);
 
         assertTrue(executor.onCommand(player, command("heal"), "heal", new String[0]));
 
@@ -90,6 +87,19 @@ class UtilityCommandTest {
         when(player.isDead()).thenReturn(true);
         MessageService messages = mock(MessageService.class);
         UtilityCommand executor = executor(config(0L, 0L), messages, ignored -> null);
+
+        assertTrue(executor.onCommand(player, command("heal"), "heal", new String[0]));
+
+        verify(player, never()).setHealth(org.mockito.ArgumentMatchers.anyDouble());
+        verify(messages).send(player, "heal-unavailable", Map.of("player", "Alex"));
+    }
+
+    @Test
+    void healRejectsInvalidMaxHealthValue() {
+        Player player = player("Alex");
+        when(player.isValid()).thenReturn(true);
+        MessageService messages = mock(MessageService.class);
+        UtilityCommand executor = executor(config(0L, 0L), messages, ignored -> null, ignored -> Double.NaN);
 
         assertTrue(executor.onCommand(player, command("heal"), "heal", new String[0]));
 
@@ -143,8 +153,16 @@ class UtilityCommandTest {
         verify(player, never()).setFoodLevel(20);
     }
 
-    private static UtilityCommand executor(UtilityConfig config, MessageService messages, java.util.function.Function<String, Player> lookup) {
-        return new UtilityCommand(() -> config, new CooldownService(), messages, lookup);
+    private static UtilityCommand executor(UtilityConfig config, MessageService messages, Function<String, Player> lookup) {
+        return executor(config, messages, lookup, ignored -> 20.0D);
+    }
+
+    private static UtilityCommand executor(
+            UtilityConfig config,
+            MessageService messages,
+            Function<String, Player> lookup,
+            ToDoubleFunction<Player> maxHealthLookup) {
+        return new UtilityCommand(() -> config, new CooldownService(), messages, lookup, maxHealthLookup);
     }
 
     private static UtilityConfig config(long feedCooldown, long healCooldown) {

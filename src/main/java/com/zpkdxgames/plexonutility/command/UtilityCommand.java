@@ -17,26 +17,30 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.ToDoubleFunction;
 
 public final class UtilityCommand implements CommandExecutor {
     private final Supplier<UtilityConfig> config;
     private final CooldownService cooldowns;
     private final MessageService messages;
     private final Function<String, Player> playerLookup;
+    private final ToDoubleFunction<Player> maxHealthLookup;
 
     public UtilityCommand(Supplier<UtilityConfig> config, CooldownService cooldowns, MessageService messages) {
-        this(config, cooldowns, messages, Bukkit::getPlayerExact);
+        this(config, cooldowns, messages, Bukkit::getPlayerExact, UtilityCommand::readMaxHealth);
     }
 
     UtilityCommand(
             Supplier<UtilityConfig> config,
             CooldownService cooldowns,
             MessageService messages,
-            Function<String, Player> playerLookup) {
+            Function<String, Player> playerLookup,
+            ToDoubleFunction<Player> maxHealthLookup) {
         this.config = config;
         this.cooldowns = cooldowns;
         this.messages = messages;
         this.playerLookup = playerLookup;
+        this.maxHealthLookup = maxHealthLookup;
     }
 
     @Override
@@ -81,13 +85,13 @@ public final class UtilityCommand implements CommandExecutor {
             return true;
         }
 
-        AttributeInstance maxHealth = target.getAttribute(Attribute.MAX_HEALTH);
-        if (maxHealth == null || !Double.isFinite(maxHealth.getValue()) || maxHealth.getValue() <= 0.0D) {
+        double maxHealth = maxHealthLookup.applyAsDouble(target);
+        if (!Double.isFinite(maxHealth) || maxHealth <= 0.0D) {
             messages.send(sender, "heal-unavailable", Map.of("player", target.getName()));
             return true;
         }
 
-        target.setHealth(maxHealth.getValue());
+        target.setHealth(maxHealth);
         if (cfg.healClearFire()) target.setFireTicks(0);
         if (cfg.healClearNegativeEffects()) {
             for (String effectName : cfg.healNegativeEffects()) {
@@ -165,5 +169,10 @@ public final class UtilityCommand implements CommandExecutor {
         long seconds = Math.max(1L, (remaining + 999_999_999L) / 1_000_000_000L);
         messages.send(sender, "cooldown", Map.of("seconds", Long.toString(seconds)));
         return false;
+    }
+
+    private static double readMaxHealth(Player player) {
+        AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+        return maxHealth == null ? Double.NaN : maxHealth.getValue();
     }
 }
