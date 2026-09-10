@@ -9,6 +9,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -31,10 +34,12 @@ public final class MessageService {
 
     private final JavaPlugin plugin;
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
+    private final YamlConfiguration defaults;
     private volatile YamlConfiguration messages;
 
     public MessageService(JavaPlugin plugin) {
         this.plugin = plugin;
+        this.defaults = loadBundledDefaults(plugin);
         this.messages = loadCandidate();
     }
 
@@ -46,12 +51,12 @@ public final class MessageService {
         } catch (IOException | InvalidConfigurationException exception) {
             throw new IllegalArgumentException("messages.yml could not be loaded: " + exception.getMessage(), exception);
         }
-        validateCatalog(candidate);
+        applyDefaultsAndValidate(candidate, defaults);
         return candidate;
     }
 
     public void apply(YamlConfiguration candidate) {
-        validateCatalog(candidate);
+        applyDefaultsAndValidate(candidate, defaults);
         messages = candidate;
     }
 
@@ -74,12 +79,29 @@ public final class MessageService {
         sender.sendMessage(component);
     }
 
+    static void applyDefaultsAndValidate(YamlConfiguration candidate, YamlConfiguration defaults) {
+        candidate.setDefaults(defaults);
+        validateCatalog(candidate);
+    }
+
     static void validateCatalog(YamlConfiguration candidate) {
         for (String key : REQUIRED_KEYS) {
             Object raw = candidate.get(key);
             if (!(raw instanceof String)) {
                 throw new IllegalArgumentException("messages.yml key '" + key + "' must be a string");
             }
+        }
+    }
+
+    private static YamlConfiguration loadBundledDefaults(JavaPlugin plugin) {
+        try (InputStream stream = plugin.getResource("messages.yml")) {
+            if (stream == null) throw new IllegalStateException("Bundled messages.yml is missing");
+            YamlConfiguration defaults = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(stream, StandardCharsets.UTF_8));
+            validateCatalog(defaults);
+            return defaults;
+        } catch (IOException exception) {
+            throw new IllegalStateException("Bundled messages.yml could not be read", exception);
         }
     }
 
