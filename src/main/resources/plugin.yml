@@ -52,3 +52,5 @@ permissions:
     default: true
   plexonutility.admin:
     default: op
+  plexonutility.reload:
+    default: op

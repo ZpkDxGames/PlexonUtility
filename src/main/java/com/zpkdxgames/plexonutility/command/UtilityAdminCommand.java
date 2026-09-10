@@ -32,12 +32,16 @@ public final class UtilityAdminCommand implements CommandExecutor {
             return true;
         }
         if (args[0].equalsIgnoreCase("reload")) {
+            if (!sender.hasPermission("plexonutility.reload")) {
+                messages.send(sender, "no-permission");
+                return true;
+            }
             try {
-                plugin.reloadUtilityConfig();
-                messages.reload();
+                plugin.reloadUtilityState();
                 messages.send(sender, "reloaded");
             } catch (RuntimeException exception) {
-                messages.send(sender, "reload-failed", Map.of("reason", exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage()));
+                String reason = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
+                messages.send(sender, "reload-failed", Map.of("reason", reason));
             }
             return true;
         }
@@ -54,9 +58,9 @@ public final class UtilityAdminCommand implements CommandExecutor {
             sender.sendMessage(Component.text("- " + feature.id() + ": " + (cfg.enabled(feature) ? "ENABLED" : "DISABLED")));
         }
         sender.sendMessage(Component.text("Cooldown players: " + cooldowns.trackedPlayers()));
-        sender.sendMessage(Component.text("AFK: NOT IMPLEMENTED (production dependency not established)"));
+        sender.sendMessage(Component.text("Schedulers: NONE"));
+        sender.sendMessage(Component.text("AFK: NOT IMPLEMENTED"));
         sender.sendMessage(Component.text("Database: NONE"));
         sender.sendMessage(Component.text("Essentials decommission: BLOCKED pending production command/Vault/dependency audit"));
-        sender.sendMessage(Component.text("Standard command labels configured: " + cfg.claimStandardCommands()));
     }
 }

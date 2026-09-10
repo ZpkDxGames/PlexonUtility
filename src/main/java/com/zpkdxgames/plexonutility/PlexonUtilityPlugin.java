@@ -9,6 +9,8 @@ import com.zpkdxgames.plexonutility.cooldown.CooldownService;
 import com.zpkdxgames.plexonutility.feature.Feature;
 import com.zpkdxgames.plexonutility.integration.CoreBridge;
 import com.zpkdxgames.plexonutility.message.MessageService;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -16,6 +18,7 @@ import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Objects;
 import java.util.Set;
 
@@ -32,7 +35,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         if (!new File(getDataFolder(), "messages.yml").exists()) saveResource("messages.yml", false);
 
         try {
-            utilityConfig = UtilityConfig.from(getConfig());
+            utilityConfig = loadUtilityConfigCandidate();
             cooldowns = new CooldownService();
             messages = new MessageService(this);
             coreBridge = new CoreBridge(this);
@@ -51,8 +54,8 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             coreBridge.ready("Enabled features: " + utilityConfig.enabledFeatures());
             getLogger().info("PlexonUtility " + getPluginMeta().getVersion() + " enabled with " + utilityConfig.enabledFeatures());
         } catch (RuntimeException exception) {
-            getLogger().severe("PlexonUtility failed to initialize: " + exception.getMessage());
-            if (coreBridge != null) coreBridge.degraded("Initialization failed: " + exception.getMessage());
+            getLogger().severe("PlexonUtility failed to initialize: " + detail(exception));
+            if (coreBridge != null) coreBridge.degraded("Initialization failed: " + detail(exception));
             getServer().getPluginManager().disablePlugin(this);
         }
     }
@@ -69,12 +72,16 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         if (cooldowns != null) cooldowns.clear(event.getPlayer().getUniqueId());
     }
 
-    public void reloadUtilityConfig() {
-        reloadConfig();
-        UtilityConfig candidate = UtilityConfig.from(getConfig());
-        utilityConfig = candidate;
+    public void reloadUtilityState() {
+        UtilityConfig candidateConfig = loadUtilityConfigCandidate();
+        YamlConfiguration candidateMessages = messages.loadCandidate();
+
+        // Both candidates are fully parsed and validated before either live reference changes.
+        messages.apply(candidateMessages);
+        utilityConfig = candidateConfig;
+
         if (coreBridge != null && coreBridge.core() != null) {
-            coreBridge.ready("Reloaded; enabled features: " + candidate.enabledFeatures());
+            coreBridge.ready("Reloaded; enabled features: " + candidateConfig.enabledFeatures());
         }
     }
 
@@ -84,6 +91,22 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
 
     public PlexonCoreAPI core() {
         return coreBridge == null ? null : coreBridge.core();
+    }
+
+    private UtilityConfig loadUtilityConfigCandidate() {
+        File file = new File(getDataFolder(), "config.yml");
+        YamlConfiguration candidate = new YamlConfiguration();
+        try {
+            candidate.load(file);
+        } catch (IOException | InvalidConfigurationException exception) {
+            throw new IllegalArgumentException("config.yml could not be loaded: " + exception.getMessage(), exception);
+        }
+        return UtilityConfig.from(candidate);
+    }
+
+    private static String detail(Throwable throwable) {
+        String message = throwable.getMessage();
+        return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
     }
 
     private final class DefaultUtilityAPI implements PlexonUtilityAPI {

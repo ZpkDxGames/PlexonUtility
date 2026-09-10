@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.1-rc.1 — 2026-09-10
+
+- Recorded the Phase 2 product decision to keep PlexonUtility active with a deliberately narrow ownership boundary.
+- Added strict configuration type/range validation and transactional config/message candidate loading.
+- Added dead/invalid-player and invalid max-health protection for `/heal`.
+- Switched named player targeting to exact-name lookup and deterministic argument-count handling.
+- Added explicit `plexonutility.reload` authorization.
+- Removed the misleading no-op `migration.claim-standard-commands` setting.
+- Expanded regression coverage for utility commands, configuration, messages, and cooldown behavior.
+- Hardened CI distribution verification and RC release evidence generation.
+- Stable `v1.0.1` remains unpublished pending PlexonCraft runtime certification.
+
 ## 1.0.0 — 2026-09-09
 
 - Initial PlexonCore 2.0-native release.

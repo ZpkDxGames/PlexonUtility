@@ -24,8 +24,3 @@ heal:
     - HUNGER
     - DARKNESS
   cooldown-seconds: 0
-
-migration:
-  # PlexonUtility owns these command labels when loaded. Keep Essentials backed up
-  # until the production command/Vault/dependency audit is complete.
-  claim-standard-commands: true

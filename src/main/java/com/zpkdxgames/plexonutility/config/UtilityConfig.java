@@ -6,6 +6,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -18,8 +19,7 @@ public record UtilityConfig(
         boolean healClearFire,
         boolean healClearNegativeEffects,
         Set<String> healNegativeEffects,
-        long healCooldownNanos,
-        boolean claimStandardCommands) {
+        long healCooldownNanos) {
 
     public UtilityConfig {
         EnumSet<Feature> featureCopy = enabledFeatures.isEmpty()
@@ -32,48 +32,98 @@ public record UtilityConfig(
     public static UtilityConfig from(FileConfiguration config) {
         EnumSet<Feature> enabled = EnumSet.noneOf(Feature.class);
         for (Feature feature : Feature.values()) {
-            if (config.getBoolean("features." + feature.id(), true)) enabled.add(feature);
+            if (readBoolean(config, "features." + feature.id(), true)) enabled.add(feature);
         }
 
-        int foodLevel = clamp(config.getInt("feed.food-level", 20), 0, 20);
-        double configuredSaturation = config.getDouble("feed.saturation", 20.0D);
-        float saturation = (float) Math.max(0.0D, Math.min(configuredSaturation, foodLevel));
-        boolean resetExhaustion = config.getBoolean("feed.reset-exhaustion", true);
-        long feedCooldown = secondsToNanos(config.getLong("feed.cooldown-seconds", 0L));
-
-        boolean clearFire = config.getBoolean("heal.clear-fire", true);
-        boolean clearNegative = config.getBoolean("heal.clear-negative-effects", false);
-        Set<String> effects = new LinkedHashSet<>();
-        for (String raw : config.getStringList("heal.negative-effects")) {
-            if (raw == null || raw.isBlank()) continue;
-            effects.add(raw.trim().toUpperCase(Locale.ROOT));
+        int foodLevel = readInt(config, "feed.food-level", 20, 0, 20);
+        double configuredSaturation = readDouble(config, "feed.saturation", 20.0D, 0.0D, 20.0D);
+        if (configuredSaturation > foodLevel) {
+            throw invalid("feed.saturation", "must not exceed feed.food-level");
         }
-        long healCooldown = secondsToNanos(config.getLong("heal.cooldown-seconds", 0L));
+        boolean resetExhaustion = readBoolean(config, "feed.reset-exhaustion", true);
+        long feedCooldown = secondsToNanos(readLong(config, "feed.cooldown-seconds", 0L, 0L, 86_400L));
+
+        boolean clearFire = readBoolean(config, "heal.clear-fire", true);
+        boolean clearNegative = readBoolean(config, "heal.clear-negative-effects", false);
+        Set<String> effects = readStringSet(config, "heal.negative-effects");
+        long healCooldown = secondsToNanos(readLong(config, "heal.cooldown-seconds", 0L, 0L, 86_400L));
 
         return new UtilityConfig(
                 enabled,
                 foodLevel,
-                saturation,
+                (float) configuredSaturation,
                 resetExhaustion,
                 feedCooldown,
                 clearFire,
                 clearNegative,
                 effects,
-                healCooldown,
-                config.getBoolean("migration.claim-standard-commands", true));
+                healCooldown);
     }
 
     public boolean enabled(Feature feature) {
         return enabledFeatures.contains(feature);
     }
 
-    private static int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
+    private static boolean readBoolean(FileConfiguration config, String path, boolean fallback) {
+        Object raw = config.get(path);
+        if (raw == null) return fallback;
+        if (raw instanceof Boolean value) return value;
+        throw invalid(path, "must be a boolean");
+    }
+
+    private static int readInt(FileConfiguration config, String path, int fallback, int min, int max) {
+        Object raw = config.get(path);
+        if (raw == null) return fallback;
+        if (!(raw instanceof Number number)) throw invalid(path, "must be an integer");
+        double value = number.doubleValue();
+        if (!Double.isFinite(value) || Math.rint(value) != value || value < min || value > max) {
+            throw invalid(path, "must be an integer from " + min + " to " + max);
+        }
+        return (int) value;
+    }
+
+    private static long readLong(FileConfiguration config, String path, long fallback, long min, long max) {
+        Object raw = config.get(path);
+        if (raw == null) return fallback;
+        if (!(raw instanceof Number number)) throw invalid(path, "must be an integer");
+        double value = number.doubleValue();
+        if (!Double.isFinite(value) || Math.rint(value) != value || value < min || value > max) {
+            throw invalid(path, "must be an integer from " + min + " to " + max);
+        }
+        return number.longValue();
+    }
+
+    private static double readDouble(FileConfiguration config, String path, double fallback, double min, double max) {
+        Object raw = config.get(path);
+        if (raw == null) return fallback;
+        if (!(raw instanceof Number number)) throw invalid(path, "must be numeric");
+        double value = number.doubleValue();
+        if (!Double.isFinite(value) || value < min || value > max) {
+            throw invalid(path, "must be from " + min + " to " + max);
+        }
+        return value;
+    }
+
+    private static Set<String> readStringSet(FileConfiguration config, String path) {
+        Object raw = config.get(path);
+        if (raw == null) return Set.of();
+        if (!(raw instanceof List<?> list)) throw invalid(path, "must be a string list");
+
+        Set<String> values = new LinkedHashSet<>();
+        for (Object item : list) {
+            if (!(item instanceof String text) || text.isBlank()) {
+                throw invalid(path, "must contain only non-blank strings");
+            }
+            values.add(text.trim().toUpperCase(Locale.ROOT));
+        }
+        return values;
     }
 
     private static long secondsToNanos(long seconds) {
-        if (seconds <= 0L) return 0L;
-        if (seconds > 86_400L) throw new IllegalArgumentException("Cooldown cannot exceed 86400 seconds");
         return Math.multiplyExact(seconds, 1_000_000_000L);
+    }
+
+    private static IllegalArgumentException invalid(String path, String detail) {
+        return new IllegalArgumentException(path + " " + detail);
     }
 }

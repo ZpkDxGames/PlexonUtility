@@ -4,19 +4,73 @@ import com.zpkdxgames.plexonutility.feature.Feature;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UtilityConfigTest {
     @Test
-    void clampsFeedValuesToBukkitSafeRange() {
-        YamlConfiguration yaml = new YamlConfiguration();
-        yaml.set("feed.food-level", 99);
-        yaml.set("feed.saturation", 200.0D);
-
-        UtilityConfig config = UtilityConfig.from(yaml);
+    void acceptsSafeDefaults() {
+        UtilityConfig config = UtilityConfig.from(new YamlConfiguration());
 
         assertEquals(20, config.feedFoodLevel());
         assertEquals(20.0F, config.feedSaturation());
+        assertEquals(0L, config.feedCooldownNanos());
+        assertEquals(0L, config.healCooldownNanos());
+        assertTrue(config.enabledFeatures().containsAll(List.of(
+                Feature.FEED, Feature.HEAL, Feature.ENDERCHEST, Feature.WORKBENCH)));
+    }
+
+    @Test
+    void rejectsOutOfRangeFoodInsteadOfSilentlyClamping() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("feed.food-level", 99);
+
+        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
+    }
+
+    @Test
+    void rejectsSaturationAboveConfiguredFoodLevel() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("feed.food-level", 10);
+        yaml.set("feed.saturation", 11.0D);
+
+        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
+    }
+
+    @Test
+    void rejectsWrongBooleanType() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("heal.clear-fire", "yes");
+
+        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
+    }
+
+    @Test
+    void rejectsFractionalCooldown() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("feed.cooldown-seconds", 1.5D);
+
+        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
+    }
+
+    @Test
+    void rejectsUnreasonableCooldown() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("feed.cooldown-seconds", 86_401L);
+
+        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
+    }
+
+    @Test
+    void rejectsNonStringNegativeEffectEntries() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("heal.negative-effects", List.of("POISON", 12));
+
+        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
     }
 
     @Test
@@ -40,19 +94,5 @@ class UtilityConfigTest {
         UtilityConfig config = UtilityConfig.from(yaml);
 
         assertTrue(config.enabledFeatures().isEmpty());
-    }
-
-    @Test
-    void rejectsUnreasonableCooldown() {
-        YamlConfiguration yaml = new YamlConfiguration();
-        yaml.set("feed.cooldown-seconds", 86_401L);
-        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
-    }
-
-    @Test
-    void zeroCooldownIsDisabled() {
-        UtilityConfig config = UtilityConfig.from(new YamlConfiguration());
-        assertEquals(0L, config.feedCooldownNanos());
-        assertEquals(0L, config.healCooldownNanos());
     }
 }
