@@ -3,6 +3,7 @@ features:
   heal: true
   enderchest: true
   workbench: true
+  afk: true
 
 feed:
   food-level: 20
@@ -24,3 +25,24 @@ heal:
     - HUNGER
     - DARKNESS
   cooldown-seconds: 0
+
+afk:
+  # AFK runtime state is intentionally ephemeral and resets on restart.
+  auto-timeout:
+    enabled: true
+    seconds: 300
+    # One shared O(online players) scan; never one task per player.
+    scan-interval-seconds: 10
+  announcements:
+    enabled: true
+  reset-on:
+    # Movement only counts when the player changes block coordinates/world.
+    movement: true
+    chat: true
+    command: true
+    interaction: true
+    block-change: true
+    damage: true
+  placeholder:
+    active: ''
+    afk: ' <gray>[AFK]</gray>'

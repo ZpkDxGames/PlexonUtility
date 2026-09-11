@@ -5,6 +5,7 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -29,6 +30,10 @@ public final class MessageService {
             "heal-other",
             "heal-unavailable",
             "enderchest-other",
+            "afk-self-on",
+            "afk-self-off",
+            "afk-announcement-on",
+            "afk-announcement-off",
             "reloaded",
             "reload-failed");
 
@@ -69,14 +74,22 @@ public final class MessageService {
     }
 
     public void send(CommandSender sender, String key, Map<String, String> replacements) {
+        sender.sendMessage(render(key, replacements));
+    }
+
+    public void broadcast(String key, Map<String, String> replacements) {
+        Component component = render(key, replacements);
+        for (Player player : plugin.getServer().getOnlinePlayers()) player.sendMessage(component);
+    }
+
+    public Component render(String key, Map<String, String> replacements) {
         YamlConfiguration catalog = messages;
         String prefix = catalog.getString("prefix", "");
         String template = catalog.getString(key, "<red>Missing message: " + key + "</red>");
         for (Map.Entry<String, String> entry : replacements.entrySet()) {
             template = template.replace("<" + entry.getKey() + ">", escape(entry.getValue()));
         }
-        Component component = miniMessage.deserialize(prefix + template);
-        sender.sendMessage(component);
+        return miniMessage.deserialize(prefix + template);
     }
 
     static void applyDefaultsAndValidate(YamlConfiguration candidate, YamlConfiguration defaults) {

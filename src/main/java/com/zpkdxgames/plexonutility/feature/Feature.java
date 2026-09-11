@@ -6,7 +6,8 @@ public enum Feature {
     FEED,
     HEAL,
     ENDERCHEST,
-    WORKBENCH;
+    WORKBENCH,
+    AFK;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);

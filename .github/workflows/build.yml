@@ -76,10 +76,17 @@ jobs:
           for resource in plugin.yml config.yml messages.yml; do
             grep -qx "$resource" target/jar-contents.txt
           done
-          grep -qx 'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' target/jar-contents.txt
-          grep -qx 'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' target/jar-contents.txt
+          for class in \
+            'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' \
+            'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' \
+            'com/zpkdxgames/plexonutility/afk/AfkManager.class' \
+            'com/zpkdxgames/plexonutility/afk/AfkTracker.class' \
+            'com/zpkdxgames/plexonutility/placeholder/UtilityPlaceholderExpansion.class'; do
+            grep -qx "$class" target/jar-contents.txt
+          done
           unzip -p "$JAR" plugin.yml | grep -F "version: '${VERSION}'"
           unzip -p "$JAR" plugin.yml | grep -F "api-version: '26.2'"
+          unzip -p "$JAR" plugin.yml | grep -F '  afk:'
           unzip -p "$JAR" META-INF/MANIFEST.MF | tr -d '\r' | grep -F "Implementation-Version: ${VERSION}"
           javap -verbose -classpath "$JAR" com.zpkdxgames.plexonutility.PlexonUtilityPlugin | grep -F 'major version: 69'
           for prefix in \

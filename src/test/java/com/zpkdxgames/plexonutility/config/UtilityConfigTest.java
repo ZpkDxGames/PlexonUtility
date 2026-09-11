@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UtilityConfigTest {
     @Test
-    void acceptsSafeDefaults() {
+    void acceptsSafeDefaultsIncludingAfkMigrationDefaults() {
         UtilityConfig config = UtilityConfig.from(new YamlConfiguration());
 
         assertEquals(20, config.feedFoodLevel());
@@ -21,7 +21,45 @@ class UtilityConfigTest {
         assertEquals(0L, config.feedCooldownNanos());
         assertEquals(0L, config.healCooldownNanos());
         assertTrue(config.enabledFeatures().containsAll(List.of(
-                Feature.FEED, Feature.HEAL, Feature.ENDERCHEST, Feature.WORKBENCH)));
+                Feature.FEED, Feature.HEAL, Feature.ENDERCHEST, Feature.WORKBENCH, Feature.AFK)));
+        assertTrue(config.afk().autoTimeoutEnabled());
+        assertEquals(300_000_000_000L, config.afk().timeoutNanos());
+        assertEquals(200L, config.afk().scanIntervalTicks());
+        assertTrue(config.afk().announcementsEnabled());
+        assertEquals("", config.afk().placeholderActive());
+        assertEquals(" <gray>[AFK]</gray>", config.afk().placeholderAfk());
+    }
+
+    @Test
+    void afkAutoTimeoutCanBeDisabledWithoutDisablingManualAfk() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("afk.auto-timeout.enabled", false);
+
+        UtilityConfig config = UtilityConfig.from(yaml);
+
+        assertTrue(config.enabled(Feature.AFK));
+        assertFalse(config.afk().autoTimeoutEnabled());
+    }
+
+    @Test
+    void afkAnnouncementsCanBeDisabled() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("afk.announcements.enabled", false);
+        assertFalse(UtilityConfig.from(yaml).afk().announcementsEnabled());
+    }
+
+    @Test
+    void rejectsUnsafeAfkTimeout() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("afk.auto-timeout.seconds", 0);
+        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
+    }
+
+    @Test
+    void rejectsMultilineAfkPlaceholder() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("afk.placeholder.afk", "AFK\nBAD");
+        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
     }
 
     @Test
@@ -84,6 +122,7 @@ class UtilityConfigTest {
         assertTrue(config.enabled(Feature.FEED));
         assertTrue(config.enabled(Feature.ENDERCHEST));
         assertTrue(config.enabled(Feature.WORKBENCH));
+        assertTrue(config.enabled(Feature.AFK));
     }
 
     @Test
