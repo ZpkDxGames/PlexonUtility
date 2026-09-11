@@ -15,17 +15,32 @@ import org.bukkit.potion.PotionEffectType;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.ToDoubleFunction;
 
 public final class UtilityCommand implements CommandExecutor {
     private final Supplier<UtilityConfig> config;
     private final CooldownService cooldowns;
     private final MessageService messages;
+    private final Function<String, Player> playerLookup;
+    private final ToDoubleFunction<Player> maxHealthLookup;
 
     public UtilityCommand(Supplier<UtilityConfig> config, CooldownService cooldowns, MessageService messages) {
+        this(config, cooldowns, messages, Bukkit::getPlayerExact, UtilityCommand::readMaxHealth);
+    }
+
+    UtilityCommand(
+            Supplier<UtilityConfig> config,
+            CooldownService cooldowns,
+            MessageService messages,
+            Function<String, Player> playerLookup,
+            ToDoubleFunction<Player> maxHealthLookup) {
         this.config = config;
         this.cooldowns = cooldowns;
         this.messages = messages;
+        this.playerLookup = playerLookup;
+        this.maxHealthLookup = maxHealthLookup;
     }
 
     @Override
@@ -40,6 +55,7 @@ public final class UtilityCommand implements CommandExecutor {
     }
 
     private boolean handleFeed(CommandSender sender, String[] args) {
+        if (args.length > 1) return false;
         UtilityConfig cfg = config.get();
         if (!ensureEnabled(sender, Feature.FEED)) return true;
         Player target = resolveTarget(sender, args, "plexonutility.feed.others");
@@ -48,7 +64,7 @@ public final class UtilityCommand implements CommandExecutor {
         if (self && !checkCooldown(sender, target, Feature.FEED, cfg.feedCooldownNanos(), "plexonutility.feed.cooldown.bypass")) return true;
 
         target.setFoodLevel(cfg.feedFoodLevel());
-        target.setSaturation(Math.min(cfg.feedSaturation(), target.getFoodLevel()));
+        target.setSaturation(cfg.feedSaturation());
         if (cfg.feedResetExhaustion()) target.setExhaustion(0.0F);
         if (self) cooldowns.start(target.getUniqueId(), Feature.FEED, cfg.feedCooldownNanos());
         messages.send(sender, self ? "feed-self" : "feed-other", Map.of("player", target.getName()));
@@ -56,6 +72,7 @@ public final class UtilityCommand implements CommandExecutor {
     }
 
     private boolean handleHeal(CommandSender sender, String[] args) {
+        if (args.length > 1) return false;
         UtilityConfig cfg = config.get();
         if (!ensureEnabled(sender, Feature.HEAL)) return true;
         Player target = resolveTarget(sender, args, "plexonutility.heal.others");
@@ -63,12 +80,18 @@ public final class UtilityCommand implements CommandExecutor {
         boolean self = sender instanceof Player player && player.getUniqueId().equals(target.getUniqueId());
         if (self && !checkCooldown(sender, target, Feature.HEAL, cfg.healCooldownNanos(), "plexonutility.heal.cooldown.bypass")) return true;
 
-        AttributeInstance maxHealth = target.getAttribute(Attribute.MAX_HEALTH);
-        if (maxHealth == null) {
-            messages.send(sender, "reload-failed", Map.of("reason", "max-health attribute unavailable"));
+        if (target.isDead() || !target.isValid()) {
+            messages.send(sender, "heal-unavailable", Map.of("player", target.getName()));
             return true;
         }
-        target.setHealth(maxHealth.getValue());
+
+        double maxHealth = maxHealthLookup.applyAsDouble(target);
+        if (!Double.isFinite(maxHealth) || maxHealth <= 0.0D) {
+            messages.send(sender, "heal-unavailable", Map.of("player", target.getName()));
+            return true;
+        }
+
+        target.setHealth(maxHealth);
         if (cfg.healClearFire()) target.setFireTicks(0);
         if (cfg.healClearNegativeEffects()) {
             for (String effectName : cfg.healNegativeEffects()) {
@@ -82,18 +105,19 @@ public final class UtilityCommand implements CommandExecutor {
     }
 
     private boolean handleEnderChest(CommandSender sender, String[] args) {
+        if (args.length > 1) return false;
         if (!ensureEnabled(sender, Feature.ENDERCHEST)) return true;
         if (!(sender instanceof Player viewer)) {
             messages.send(sender, "players-only");
             return true;
         }
         Player target = viewer;
-        if (args.length > 0) {
+        if (args.length == 1) {
             if (!sender.hasPermission("plexonutility.enderchest.others")) {
                 messages.send(sender, "no-permission");
                 return true;
             }
-            target = Bukkit.getPlayer(args[0]);
+            target = playerLookup.apply(args[0]);
             if (target == null) {
                 messages.send(sender, "player-not-found");
                 return true;
@@ -107,6 +131,7 @@ public final class UtilityCommand implements CommandExecutor {
     }
 
     private boolean handleWorkbench(CommandSender sender, String[] args) {
+        if (args.length != 0) return false;
         if (!ensureEnabled(sender, Feature.WORKBENCH)) return true;
         if (!(sender instanceof Player player)) {
             messages.send(sender, "players-only");
@@ -123,12 +148,12 @@ public final class UtilityCommand implements CommandExecutor {
     }
 
     private Player resolveTarget(CommandSender sender, String[] args, String othersPermission) {
-        if (args.length > 0) {
+        if (args.length == 1) {
             if (!sender.hasPermission(othersPermission)) {
                 messages.send(sender, "no-permission");
                 return null;
             }
-            Player target = Bukkit.getPlayer(args[0]);
+            Player target = playerLookup.apply(args[0]);
             if (target == null) messages.send(sender, "player-not-found");
             return target;
         }
@@ -144,5 +169,10 @@ public final class UtilityCommand implements CommandExecutor {
         long seconds = Math.max(1L, (remaining + 999_999_999L) / 1_000_000_000L);
         messages.send(sender, "cooldown", Map.of("seconds", Long.toString(seconds)));
         return false;
+    }
+
+    private static double readMaxHealth(Player player) {
+        AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+        return maxHealth == null ? Double.NaN : maxHealth.getValue();
     }
 }

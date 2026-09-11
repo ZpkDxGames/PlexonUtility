@@ -2,6 +2,7 @@ package com.zpkdxgames.plexonutility.command;
 
 import com.zpkdxgames.plexoncore.api.PlexonCoreAPI;
 import com.zpkdxgames.plexonutility.PlexonUtilityPlugin;
+import com.zpkdxgames.plexonutility.afk.AfkManager;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.cooldown.CooldownService;
 import com.zpkdxgames.plexonutility.feature.Feature;
@@ -18,11 +19,13 @@ public final class UtilityAdminCommand implements CommandExecutor {
     private final PlexonUtilityPlugin plugin;
     private final CooldownService cooldowns;
     private final MessageService messages;
+    private final AfkManager afk;
 
-    public UtilityAdminCommand(PlexonUtilityPlugin plugin, CooldownService cooldowns, MessageService messages) {
+    public UtilityAdminCommand(PlexonUtilityPlugin plugin, CooldownService cooldowns, MessageService messages, AfkManager afk) {
         this.plugin = plugin;
         this.cooldowns = cooldowns;
         this.messages = messages;
+        this.afk = afk;
     }
 
     @Override
@@ -32,12 +35,16 @@ public final class UtilityAdminCommand implements CommandExecutor {
             return true;
         }
         if (args[0].equalsIgnoreCase("reload")) {
+            if (!sender.hasPermission("plexonutility.reload")) {
+                messages.send(sender, "no-permission");
+                return true;
+            }
             try {
-                plugin.reloadUtilityConfig();
-                messages.reload();
+                plugin.reloadUtilityState();
                 messages.send(sender, "reloaded");
             } catch (RuntimeException exception) {
-                messages.send(sender, "reload-failed", Map.of("reason", exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage()));
+                String reason = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
+                messages.send(sender, "reload-failed", Map.of("reason", reason));
             }
             return true;
         }
@@ -54,9 +61,12 @@ public final class UtilityAdminCommand implements CommandExecutor {
             sender.sendMessage(Component.text("- " + feature.id() + ": " + (cfg.enabled(feature) ? "ENABLED" : "DISABLED")));
         }
         sender.sendMessage(Component.text("Cooldown players: " + cooldowns.trackedPlayers()));
-        sender.sendMessage(Component.text("AFK: NOT IMPLEMENTED (production dependency not established)"));
+        sender.sendMessage(Component.text("AFK tracked/afk: " + afk.trackedPlayers() + "/" + afk.afkPlayers()));
+        sender.sendMessage(Component.text("AFK shared schedulers: " + afk.schedulerCount()));
+        sender.sendMessage(Component.text("AFK auto-timeout: " + (cfg.afk().autoTimeoutEnabled() ? (cfg.afk().timeoutNanos() / 1_000_000_000L) + "s" : "DISABLED")));
+        sender.sendMessage(Component.text("AFK state persistence: EPHEMERAL"));
+        sender.sendMessage(Component.text("PlaceholderAPI: " + (plugin.placeholderRegistered() ? "REGISTERED" : "UNAVAILABLE")));
         sender.sendMessage(Component.text("Database: NONE"));
-        sender.sendMessage(Component.text("Essentials decommission: BLOCKED pending production command/Vault/dependency audit"));
-        sender.sendMessage(Component.text("Standard command labels configured: " + cfg.claimStandardCommands()));
+        sender.sendMessage(Component.text("Essentials expansion removal: BLOCKED until TAB AFK/vanish/nickname placeholders are migrated"));
     }
 }

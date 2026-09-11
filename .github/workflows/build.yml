@@ -46,24 +46,58 @@ jobs:
       - name: Test and package
         run: mvn -B -ntp clean verify
 
+      - name: Require every discovered test to pass and run
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          for path in sorted(glob.glob('target/surefire-reports/TEST-*.xml')):
+              root = ET.parse(path).getroot()
+              for key in totals:
+                  totals[key] += int(root.attrib.get(key, 0))
+          print("TEST_SUMMARY " + " ".join(f"{key}={value}" for key, value in totals.items()))
+          if totals["tests"] == 0 or any(totals[key] != 0 for key in ("failures", "errors", "skipped")):
+              sys.exit(1)
+          PY
+
       - name: Verify distribution
         shell: bash
         run: |
           set -euo pipefail
-          JAR="target/PlexonUtility-1.0.0.jar"
+          VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          JAR="target/PlexonUtility-${VERSION}.jar"
           test -s "$JAR"
           jar tf "$JAR" > target/jar-contents.txt
-          grep -qx 'plugin.yml' target/jar-contents.txt
-          grep -qx 'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' target/jar-contents.txt
-          grep -qx 'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' target/jar-contents.txt
-          unzip -p "$JAR" plugin.yml | grep -F "version: '1.0.0'"
+          for resource in plugin.yml config.yml messages.yml; do
+            grep -qx "$resource" target/jar-contents.txt
+          done
+          for class in \
+            'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' \
+            'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' \
+            'com/zpkdxgames/plexonutility/afk/AfkManager.class' \
+            'com/zpkdxgames/plexonutility/afk/AfkTracker.class' \
+            'com/zpkdxgames/plexonutility/placeholder/UtilityPlaceholderExpansion.class'; do
+            grep -qx "$class" target/jar-contents.txt
+          done
+          unzip -p "$JAR" plugin.yml | grep -F "version: '${VERSION}'"
           unzip -p "$JAR" plugin.yml | grep -F "api-version: '26.2'"
+          unzip -p "$JAR" plugin.yml | grep -F '  afk:'
+          unzip -p "$JAR" META-INF/MANIFEST.MF | tr -d '\r' | grep -F "Implementation-Version: ${VERSION}"
           javap -verbose -classpath "$JAR" com.zpkdxgames.plexonutility.PlexonUtilityPlugin | grep -F 'major version: 69'
-          if grep -q '^com/zpkdxgames/plexoncore/' target/jar-contents.txt; then
-            echo "PlexonCore runtime classes must not be shaded into PlexonUtility" >&2
-            exit 1
-          fi
-          if grep -q '^io/papermc/' target/jar-contents.txt || grep -q '^org/bukkit/' target/jar-contents.txt; then
-            echo "Paper/Bukkit runtime classes must not be bundled into PlexonUtility" >&2
-            exit 1
-          fi
+          for prefix in \
+            'com/zpkdxgames/plexoncore/' \
+            'me/clip/placeholderapi/' \
+            'io/papermc/' \
+            'org/bukkit/' \
+            'net/kyori/adventure/'; do
+            if grep -q "^${prefix}" target/jar-contents.txt; then
+              echo "Provided runtime classes must not be bundled: ${prefix}" >&2
+              exit 1
+            fi
+          done
+          (cd target && sha256sum "PlexonUtility-${VERSION}.jar" > SHA256SUMS.txt && sha256sum --check SHA256SUMS.txt)

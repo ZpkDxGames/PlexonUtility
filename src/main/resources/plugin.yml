@@ -4,6 +4,8 @@ main: com.zpkdxgames.plexonutility.PlexonUtilityPlugin
 api-version: '26.2'
 depend:
   - PlexonCore
+softdepend:
+  - PlaceholderAPI
 loadbefore:
   - Essentials
 commands:
@@ -27,6 +29,10 @@ commands:
     usage: /workbench
     aliases: [wb, pworkbench]
     permission: plexonutility.workbench
+  afk:
+    description: Toggle your AFK state.
+    usage: /afk
+    permission: plexonutility.afk
   utilityadmin:
     description: PlexonUtility diagnostics and reload.
     usage: /utilityadmin <diagnostics|reload>
@@ -50,5 +56,11 @@ permissions:
     default: op
   plexonutility.workbench:
     default: true
+  plexonutility.afk:
+    default: true
+  plexonutility.afk.auto.bypass:
+    default: op
   plexonutility.admin:
+    default: op
+  plexonutility.reload:
     default: op
