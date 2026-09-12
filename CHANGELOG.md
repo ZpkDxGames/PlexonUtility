@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.3.0 — 2026-09-12
+
+- Added a dedicated 45-slot Admin Center reachable from `/utility` and `/utilityadmin`, while preserving text diagnostics/family/integrations/reload subcommands and adding `/uadmin`.
+- Added deterministic paginated online-player selection and a focused Player Actions GUI with info, read-only inventory inspection, Ender Chest, heal, feed, administrative teleport/bring, prison send, kick, and ban.
+- Added `/invsee <player>` as an online-only, exact-name, protected read-only snapshot including storage, armor, and offhand; displayed stacks are cloned and target logout closes stale inspectors safely.
+- Added native event-driven `/vanish [on|off]` using Paper plugin-aware hide/show and player-list APIs, granular `vanish.see`, optional persistence, join/quit suppression, reconnect/viewer reconciliation, and shutdown cleanup with no polling task.
+- Added native `/kick`, profile `/ban`, and `/unban` backed by modern Paper/Bukkit authority instead of a private punishment database; cached/known offline lookup avoids blocking profile web requests.
+- Added bounded ban durations (`m`/`h`/`d` plus permanent aliases), sanitized 160-character reasons, actor/source recording, Adventure kick components, GUI typed input, and explicit final confirmations.
+- Added `/prison status|set|goto|send|clear` as a single configurable holding waypoint, deliberately excluding jail/sentence/punishment-history behavior.
+- Added `admin-data.yml` for schema-validated prison and optional vanish state, with Core IO-lane persistence and atomic/recoverable file replacement on state changes only.
+- Added granular admin permissions, server-log audit records for destructive/state-changing actions, and destructive self-action protection in the GUI.
+- Added `%plexonutility_vanished%` and a binary-compatible `PlexonUtilityAPI#isVanished(UUID)` default method.
+- Extracted reusable feed/heal/Ender Chest business logic so the admin GUI invokes services directly instead of issuing new internal admin commands.
+- Added a shared Utility menu item factory that forces non-italic names/lore and hides irrelevant attributes while keeping runtime values on safe Core template insertion.
+- Documented the native-vanish migration from old SuperVanish/TAB assumptions and preserved PlexonHomes/PlexonTravel/PlexonChats/PlexonRanks/PlexonBlacksmith ownership boundaries.
+- Expanded regression coverage for duration parsing, admin config/model behavior, inventory clone isolation, vanish authorization/persistence, prison coordinate fidelity, and moderation reason validation.
+- Deliberately deferred editable invsee and clear-inventory behavior; no freeze, mute, IP ban, punishment DB, appeals, web panel, cross-server moderation, rank/economy editor, or nickname system was added.
+
 ## 3.2.0 — 2026-09-12
 
 - Rebuilt `/utility` as a compact 45-slot premium PlexonCraft control hub with restrained green → cyan framing and clearer visual hierarchy.

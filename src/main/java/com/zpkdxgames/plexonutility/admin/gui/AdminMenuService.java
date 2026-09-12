@@ -122,7 +122,7 @@ public final class AdminMenuService {
     public void openPlayerSelector(Player viewer, int requestedPage, SelectorContext context) {
         String permission = context == SelectorContext.PRISON_SEND ? "plexonutility.admin.prison.send" : "plexonutility.admin.menu";
         if (!require(viewer, permission)) return;
-        List<Player> online = Bukkit.getOnlinePlayers().stream()
+        List<? extends Player> online = Bukkit.getOnlinePlayers().stream()
                 .filter(Player::isConnected)
                 .sorted(Comparator.comparing(Player::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
@@ -274,16 +274,12 @@ public final class AdminMenuService {
 
     private void inspectInventory(Player actor, UUID targetId) {
         Player target = online(targetId, actor);
-        if (target != null && requireFeature(actor, config.get().admin().inventoryInspectionEnabled(), "plexonutility.admin.invsee")) {
-            inventory.open(actor, target);
-        }
+        if (target != null && requireFeature(actor, config.get().admin().inventoryInspectionEnabled(), "plexonutility.admin.invsee")) inventory.open(actor, target);
     }
 
     private void openEnderChest(Player actor, UUID targetId) {
         Player target = online(targetId, actor);
-        if (target != null && requireFeature(actor, config.get().enabled(Feature.ENDERCHEST), "plexonutility.enderchest.others")) {
-            utilities.openEnderChest(actor, target);
-        }
+        if (target != null && requireFeature(actor, config.get().enabled(Feature.ENDERCHEST), "plexonutility.enderchest.others")) utilities.openEnderChest(actor, target);
     }
 
     private void heal(Player actor, UUID targetId) {

@@ -1,91 +1,155 @@
 # PlexonUtility
 
-Core-native player utilities, quiet HUD feedback, PlexonFamily interoperability, and ecosystem diagnostics for PlexonCraft.
+Core-native player utilities, quiet HUD feedback, PlexonFamily interoperability, and a focused native staff control plane for PlexonCraft.
 
-## 3.1 stable surface
+## 3.3.0 stable surface
 
-PlexonUtility 3.1 keeps generic convenience actions together while delegating shared infrastructure to PlexonCore:
+PlexonUtility 3.3.0 preserves the 3.2 player Utility hub and adds a deliberately small administrative toolkit. It is not an Essentials clone and does not absorb specialist PlexonFamily responsibilities.
 
-- `/utility` — 4-row Plexon utility hub with player status, AFK state, utility availability, family readiness, PlexonHomes navigation, refresh/close controls, and admin diagnostics
+Player commands:
+
+- `/utility` — 45-slot player utility hub with live state, family readiness, PlexonHomes navigation, help, refresh/close, and Admin Center entry for authorized staff
 - `/feed [player]`
 - `/heal [player]`
 - `/enderchest [player]` (`/ec`)
 - `/workbench`
 - `/trash` — disposable writable inventory; remaining contents are destroyed on close
-- `/afk` — manual and automatic AFK state with bossbar/actionbar feedback, PlaceholderAPI, and a public AFK transition event
+- `/afk` — manual/automatic AFK state with bossbar/actionbar feedback, PlaceholderAPI, and the public AFK event/API
+
+Native admin commands:
+
+- `/utilityadmin` (`/uadmin`) — opens the Admin Center for authorized players; console receives text diagnostics
 - `/utilityadmin diagnostics|family|integrations|reload`
+- `/invsee <player>` — online, exact-name, read-only cloned inventory snapshot including storage, armor, and offhand
+- `/vanish [on|off]` — self-vanish using Paper plugin-aware visibility and player-list APIs
+- `/kick <player> [reason...]`
+- `/ban <player> [duration|perm] [reason...]` — native profile-ban authority; duration examples: `30m`, `2h`, `1d`, `7d`, `30d`
+- `/unban <player>` — removes the same native profile ban
+- `/prison status|set|goto|send <player>|clear` — holding-location waypoint only, not a jail/sentence engine
 
-## Quiet feedback policy
+## Admin Center
 
-3.1 moves routine personal feedback away from chat:
+The Admin Center uses `PlexonCore.gui()` for protected inventory navigation and Paper Dialogs for typed moderation input.
 
-- persistent personal state → bossbar
+Surfaces:
+
+- 45-slot Admin Center
+- 54-slot deterministic alphabetical online-player selector
+- 45-slot player actions screen
+- compact prison management screen
+- paginated native profile-ban management screen
+- read-only inventory inspector
+
+Selected-player actions include player information, inventory inspection, Ender Chest, heal, feed, admin teleport-to, bring, send-to-prison, kick, and ban. Kick/ban have explicit final confirmation. Destructive self kick/ban is blocked from the GUI.
+
+Editable inventory inspection and clear-inventory are deliberately not shipped in 3.3.0. Read-only inspection avoids duplication/deletion races; `plexonutility.admin.clearinventory` is reserved for a future deliberately reviewed action.
+
+## Native vanish
+
+Vanish is event-driven and creates no polling task.
+
+- `viewer.hidePlayer(plugin, target)` / `showPlayer(...)` preserve plugin ownership semantics
+- player-list visibility is reconciled with Paper list/unlist APIs
+- staff with `plexonutility.admin.vanish.see` retain visibility
+- joining viewers receive the correct visibility state
+- optional persistence is stored in `admin-data.yml`
+- normal join/quit announcements can be suppressed for vanished staff
+- plugin-owned visibility is restored on shutdown
+
+Do not intentionally operate PlexonUtility native vanish alongside another authoritative vanish engine. If production still uses SuperVanish or another provider, choose one authority during migration. TAB configurations that depended on `%supervanish_isvanished%` should be migrated to `%plexonutility_vanished%` or an equivalent native condition. PlexonChats join/quit handling should keep its hidden-message/respect-hidden behavior enabled during cutover.
+
+## Native moderation
+
+PlexonUtility uses Paper/Bukkit profile bans rather than a private punishment database.
+
+- online exact-name lookup first
+- cached/known offline profile lookup only; no synchronous web profile lookup on the primary thread
+- permanent and bounded-duration profile bans
+- actor/source and sanitized reason recorded by the native ban authority
+- online ban can kick the target as part of the supported API operation
+- kick uses Adventure `Component` feedback
+- destructive actions are logged with actor/target identity and relevant reason/duration
+- no IP bans, mute, freeze, punishment history, appeals, web moderation panel, or cross-server network bans
+
+## Prison waypoint
+
+`/prison` owns one configurable holding location in `admin-data.yml`: world, coordinates, yaw, and pitch. It can be set, inspected, visited, used to send an online target, and cleared.
+
+It does **not** implement movement locking, sentence timers, jailed-player persistence, automatic release/return, inventory confiscation, or punishment history.
+
+## Persistence
+
+Human-authored policy stays in `config.yml`. Runtime admin state stays in `admin-data.yml` with schema validation.
+
+- prison waypoint and optional persistent vanish UUIDs only
+- writes occur only on state changes
+- writes use PlexonCore's IO scheduler lane
+- temporary-file + atomic-move where supported, recoverable replacement fallback otherwise
+- no disk I/O in movement/chat/inventory-click hot paths
+- corrupt/invalid admin data fails safely instead of silently resetting valid state
+
+## Menu/text safety
+
+All protected navigation stays on `PlexonCore.gui()`. All MiniMessage/template rendering stays on `PlexonCore.text()`.
+
+- runtime/player/reason/world values use safe template insertion rather than being reparsed as MiniMessage markup
+- menu names/lore force vanilla italics off
+- irrelevant attribute tooltip clutter is hidden where appropriate
+- green = ready/success, aqua/cyan = information/navigation, yellow/gold = action/caution, red = destructive, gray = metadata/unavailable
+- no animation scheduler or plugin-local generic GUI router
+
+## Quiet feedback and AFK
+
+3.3 preserves the established quiet-feedback architecture:
+
+- persistent personal AFK state → bossbar
 - short successful self-actions → actionbar
-- social state changes → compact prefixless chat by default
-- errors, permission failures, cooldowns, and diagnostics → normal prefixed chat
+- compact social AFK state changes → prefixless chat by default
+- errors, permission failures, cooldowns, and detailed diagnostics → normal prefixed chat
 
-AFK behavior by default:
+AFK remains the only shared repeating Utility task when automatic timeout is enabled. No admin capability adds a recurring scheduler.
 
-- entering AFK shows a persistent `AFK • You are currently away` bossbar to the affected player;
-- other online players receive a compact `<player> is now AFK` line without the PlexonUtility prefix;
-- returning active removes the bossbar and shows `You are active again` in the actionbar;
-- rapid AFK cycles suppress the public return line to reduce chat spam;
-- the player whose state changed never receives their own public AFK announcement.
-
-Successful self `/feed`, `/heal`, and `/trash` feedback also uses the actionbar by default. These policies are configurable under `feedback:` in `config.yml`.
-
-The feedback layer creates no scheduler or animation task. AFK bossbars are lifecycle-managed on active transition, quit, reload/feature disable, and plugin shutdown.
-
-## MiniMessage and PlexonCore
-
-PlexonUtility does not create its own MiniMessage parser. Text rendering uses `PlexonCore.text()`:
-
-- configured MiniMessage is validated at startup/reload;
-- prefixed and prefixless static components are cached until reload;
-- runtime values use safe `TextService.renderTemplate(...)` insertion rather than parsing user/runtime values as MiniMessage;
-- missing keys introduced by upgrades are copied from bundled defaults into existing `messages.yml` files without overwriting customized values.
-
-The module publishes capabilities through PlexonCore including `utility-api`, `afk-state`, `afk-event`, `placeholderapi`, `quiet-feedback`, `core-text`, `core-gui`, `core-scheduler`, `core-integrations`, `family-compatibility`, and `complement-diagnostics`.
-
-## PlexonFamily interoperability
-
-PlexonUtility uses `PlexonCore.integrations()` as the shared compatibility registry. Discovery refreshes on startup, explicit reload/diagnostics, and plugin enable/disable events; there is no recurring compatibility poll.
-
-Known family products include PlexonBackpacks, PlexonBlacksmith, PlexonChats, PlexonCrates, PlexonGPFlags, PlexonHomes, PlexonJobs, PlexonKeys, PlexonPanel, PlexonQuests, PlexonRanks, PlexonShops, PlexonSkills, PlexonSpawners, PlexonTools, and PlexonTravel.
-
-`/utilityadmin family` reports the live registry view.
-
-### PlexonHomes integration and rank limits
-
-PlexonHomes remains authoritative for home persistence, limits, `/home`, `/homes`, and teleport safety. PlexonUtility only exposes the existing PlexonHomes `/homes` GUI from the Utility hub when the integration is ready.
-
-PlexonHomes supports rank-friendly numeric limits:
-
-```text
-plexonhomes.limit.<N>
-plexonhomes.limit.unlimited
-```
-
-The highest active numeric permission wins; `plexonhomes.limit.unlimited` overrides numeric values. PlexonRanks or LuckPerms can therefore grant progressively larger limits without hard-coding rank logic into PlexonUtility.
-
-## AFK interoperability
+## Placeholder/API interoperability
 
 PlaceholderAPI outputs:
 
 ```text
 %plexonutility_afk%
 %plexonutility_is_afk%
+%plexonutility_vanished%
 ```
 
-`%plexonutility_afk%` returns the configured display value. `%plexonutility_is_afk%` returns `true` or `false`, making it suitable for TAB `placeholder-output-replacements`.
+Public API:
 
-Other plugins can also consume `PlexonUtilityAPI#isAfk(UUID)` or listen for `AfkStateChangeEvent`. The event is informational, non-cancellable, and emitted on the primary thread after the AFK state changes.
+- `PlexonUtilityAPI#isAfk(UUID)`
+- `PlexonUtilityAPI#isVanished(UUID)` — added as a binary-compatible default method
+- `AfkStateChangeEvent`
 
 ## Specialist ownership boundary
 
-PlexonUtility does not reimplement mature specialist systems. `/utilityadmin integrations` detects and publishes availability for areas such as claims/regions, CoreProtect, LuckPerms, configurable menus, anti-cheat, display/HUD plugins, spark/Chunky, and proximity voice.
+PlexonUtility does not absorb:
 
-Dedicated Plexon products retain their own data, transaction, and gameplay authority.
+- homes persistence/limits/teleports → PlexonHomes
+- spawn/hub/back/warps/TPA/player travel → PlexonTravel
+- repair/enchant gameplay → PlexonBlacksmith
+- ranks/permission progression → PlexonRanks / LuckPerms
+- economy/shops → the configured economy/shop providers
+- jobs → PlexonJobs
+- chat moderation/muting/social communication → PlexonChats
+- protection/claims → existing claims/flags providers
+
+The 3.3 native admin scope intentionally supersedes older documentation that said all vanish/moderation must remain external, but only for the narrow capabilities documented above.
+
+## PlexonHomes integration
+
+PlexonHomes remains authoritative for home persistence, limits, `/home`, `/homes`, and teleport safety. PlexonUtility only navigates to the existing Homes GUI when that family integration is ready.
+
+Rank-friendly limits remain:
+
+```text
+plexonhomes.limit.<N>
+plexonhomes.limit.unlimited
+```
 
 ## Runtime
 
@@ -94,39 +158,47 @@ Dedicated Plexon products retain their own data, transaction, and gameplay autho
 - PlexonCore `2.0.5` compile/runtime boundary (`depend: PlexonCore`)
 - PlaceholderAPI optional
 - PlexonHomes optional integration
-- no plugin-owned database
 - in-memory monotonic cooldowns
 - one shared AFK timeout scan only when automatic AFK is enabled
-- no feedback scheduler or per-player repeating task
+- event-driven vanish; no vanish/prison/inventory/integration polling
+- no synchronous network profile lookup
 
-## Build and release
+## Permissions
 
-CI downloads the immutable `PlexonCore-2.0.5.jar`, verifies its pinned SHA-256, installs it into the CI-local Maven repository, then runs:
+Player-facing permissions remain unchanged. Admin permissions are granular and inherit from the OP-default `plexonutility.admin` parent:
+
+```text
+plexonutility.admin
+plexonutility.admin.menu
+plexonutility.admin.invsee
+plexonutility.admin.vanish
+plexonutility.admin.vanish.see
+plexonutility.admin.kick
+plexonutility.admin.ban
+plexonutility.admin.unban
+plexonutility.admin.prison
+plexonutility.admin.prison.set
+plexonutility.admin.prison.goto
+plexonutility.admin.prison.send
+plexonutility.admin.prison.clear
+plexonutility.admin.teleport
+plexonutility.admin.clearinventory
+plexonutility.reload
+```
+
+## Build and stable release
+
+CI provisions the immutable `PlexonCore-2.0.5.jar`, verifies its pinned SHA-256, installs it into the CI-local Maven repository, then runs:
 
 ```bash
 mvn -B -ntp clean verify
 ```
 
-The stable artifact is `target/PlexonUtility-3.1.0.jar`. CI verifies Java class major `69`, Paper `26.2` metadata, required runtime classes/resources, command descriptors, all tests, SHA-256 output, and that Core/Paper/Bukkit/PlaceholderAPI/Adventure runtime classes are not shaded into the JAR.
+The stable artifact is `PlexonUtility-3.3.0.jar`. Build/release verification checks Java class major `69`, Paper `26.2` metadata, required admin/runtime classes and command descriptors, all discovered tests with zero failures/errors/skips, provided-API isolation, SHA-256 generation, and `git diff --check`.
 
-The stable release workflow publishes only an exact `main` commit with a stable Maven version, matching release notes, and a previously unused tag.
+The stable release workflow publishes only the exact merged `main` source to tag `v3.3.0` and attaches:
 
-## Permissions
-
-```text
-plexonutility.menu
-plexonutility.feed
-plexonutility.feed.others
-plexonutility.feed.cooldown.bypass
-plexonutility.heal
-plexonutility.heal.others
-plexonutility.heal.cooldown.bypass
-plexonutility.enderchest
-plexonutility.enderchest.others
-plexonutility.workbench
-plexonutility.trash
-plexonutility.afk
-plexonutility.afk.auto.bypass
-plexonutility.admin
-plexonutility.reload
-```
+- `PlexonUtility-3.3.0.jar`
+- `SHA256SUMS.txt`
+- `TEST_SUMMARY.txt`
+- `PROVENANCE.txt`
