@@ -45,9 +45,34 @@ commands:
     usage: /afk
     permission: plexonutility.afk
   utilityadmin:
-    description: PlexonUtility diagnostics, family compatibility, integrations and reload.
-    usage: /utilityadmin <diagnostics|family|integrations|reload>
-    permission: plexonutility.admin
+    description: Open the PlexonUtility Admin Center or use text diagnostics/reload.
+    usage: /utilityadmin [diagnostics|family|integrations|reload]
+    aliases: [uadmin]
+    permission: plexonutility.admin.menu
+  invsee:
+    description: Open a read-only snapshot of an online player's inventory.
+    usage: /invsee <player>
+    permission: plexonutility.admin.invsee
+  vanish:
+    description: Toggle native staff self-vanish.
+    usage: /vanish [on|off]
+    permission: plexonutility.admin.vanish
+  kick:
+    description: Remove an online player with an optional reason.
+    usage: /kick <player> [reason...]
+    permission: plexonutility.admin.kick
+  ban:
+    description: Apply a native profile ban to a known player.
+    usage: /ban <player> [duration|perm] [reason...]
+    permission: plexonutility.admin.ban
+  unban:
+    description: Remove an active native profile ban.
+    usage: /unban <player>
+    permission: plexonutility.admin.unban
+  prison:
+    description: Manage the PlexonUtility prison holding waypoint.
+    usage: /prison <status|set|goto|send|clear> [player]
+    permission: plexonutility.admin.prison
 permissions:
   plexonutility.menu:
     default: true
@@ -75,7 +100,57 @@ permissions:
     default: true
   plexonutility.afk.auto.bypass:
     default: op
+
   plexonutility.admin:
     default: op
+    children:
+      plexonutility.admin.menu: true
+      plexonutility.admin.invsee: true
+      plexonutility.admin.vanish: true
+      plexonutility.admin.vanish.see: true
+      plexonutility.admin.kick: true
+      plexonutility.admin.ban: true
+      plexonutility.admin.unban: true
+      plexonutility.admin.prison: true
+      plexonutility.admin.prison.set: true
+      plexonutility.admin.prison.goto: true
+      plexonutility.admin.prison.send: true
+      plexonutility.admin.prison.clear: true
+      plexonutility.admin.teleport: true
+      plexonutility.admin.clearinventory: true
+      plexonutility.reload: true
+  plexonutility.admin.menu:
+    default: false
+  plexonutility.admin.invsee:
+    default: false
+  plexonutility.admin.vanish:
+    default: false
+  plexonutility.admin.vanish.see:
+    default: false
+  plexonutility.admin.kick:
+    default: false
+  plexonutility.admin.ban:
+    default: false
+  plexonutility.admin.unban:
+    default: false
+  plexonutility.admin.prison:
+    default: false
+    children:
+      plexonutility.admin.prison.set: true
+      plexonutility.admin.prison.goto: true
+      plexonutility.admin.prison.send: true
+      plexonutility.admin.prison.clear: true
+  plexonutility.admin.prison.set:
+    default: false
+  plexonutility.admin.prison.goto:
+    default: false
+  plexonutility.admin.prison.send:
+    default: false
+  plexonutility.admin.prison.clear:
+    default: false
+  plexonutility.admin.teleport:
+    default: false
+  plexonutility.admin.clearinventory:
+    default: false
   plexonutility.reload:
     default: op

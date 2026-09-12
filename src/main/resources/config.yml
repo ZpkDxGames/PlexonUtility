@@ -53,10 +53,8 @@ afk:
 
 # Quiet-by-default presentation policy. Errors and admin diagnostics still use chat.
 feedback:
-  # Successful self-actions such as /feed, /heal and /trash use the actionbar.
   utility-success-actionbar: true
   social-events:
-    # AFK social lines are compact and prefixless by default.
     prefix: false
   afk:
     bossbar:
@@ -65,5 +63,24 @@ feedback:
       overlay: PROGRESS
     return-actionbar:
       enabled: true
-    # If AFK is toggled off almost immediately, suppress the public "is back" line.
     suppress-short-return-seconds: 8
+
+# Focused native staff toolkit. Runtime state is stored in admin-data.yml, not here.
+admin:
+  enabled: true
+  vanish:
+    enabled: true
+    persist: true
+    suppress-join-quit: true
+  moderation:
+    kick:
+      enabled: true
+      default-reason: 'Removed by staff.'
+    ban:
+      enabled: true
+      default-reason: 'Banned by staff.'
+      max-duration-days: 3650
+  prison:
+    enabled: true
+  inventory-inspection:
+    enabled: true

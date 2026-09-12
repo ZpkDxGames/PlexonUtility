@@ -1,9 +1,18 @@
 package com.zpkdxgames.plexonutility;
 
 import com.zpkdxgames.plexoncore.api.PlexonCoreAPI;
+import com.zpkdxgames.plexonutility.admin.AdminAuditService;
+import com.zpkdxgames.plexonutility.admin.AdminDataStore;
+import com.zpkdxgames.plexonutility.admin.gui.AdminMenuService;
+import com.zpkdxgames.plexonutility.admin.inventory.InventoryInspectionService;
+import com.zpkdxgames.plexonutility.admin.moderation.ModerationService;
+import com.zpkdxgames.plexonutility.admin.prison.PrisonService;
+import com.zpkdxgames.plexonutility.admin.vanish.VanishListener;
+import com.zpkdxgames.plexonutility.admin.vanish.VanishService;
 import com.zpkdxgames.plexonutility.afk.AfkManager;
 import com.zpkdxgames.plexonutility.afk.AfkTracker;
 import com.zpkdxgames.plexonutility.api.PlexonUtilityAPI;
+import com.zpkdxgames.plexonutility.command.AdminActionCommand;
 import com.zpkdxgames.plexonutility.command.AfkCommand;
 import com.zpkdxgames.plexonutility.command.UtilityAdminCommand;
 import com.zpkdxgames.plexonutility.command.UtilityCommand;
@@ -17,6 +26,7 @@ import com.zpkdxgames.plexonutility.integration.FamilyCompatibilityService;
 import com.zpkdxgames.plexonutility.menu.UtilityMenuService;
 import com.zpkdxgames.plexonutility.message.MessageService;
 import com.zpkdxgames.plexonutility.placeholder.UtilityPlaceholderExpansion;
+import com.zpkdxgames.plexonutility.service.PlayerUtilityService;
 import com.zpkdxgames.plexonutility.trash.TrashService;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -42,6 +52,8 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
     private FamilyCompatibilityService family;
     private AfkTracker afkTracker;
     private AfkManager afkManager;
+    private AdminDataStore adminData;
+    private VanishService vanishService;
     private UtilityPlaceholderExpansion placeholderExpansion;
     private PlexonUtilityAPI api;
 
@@ -68,30 +80,60 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             afkTracker = new AfkTracker();
             afkManager = new AfkManager(this, this::utilityConfig, feedback, afkTracker, core.scheduler());
 
-            UtilityCommand utilityCommand = new UtilityCommand(this::utilityConfig, cooldowns, messages, feedback);
+            PlayerUtilityService playerUtilities = new PlayerUtilityService(this::utilityConfig, cooldowns, messages, feedback);
+            UtilityCommand utilityCommand = new UtilityCommand(this::utilityConfig, messages, playerUtilities);
             Objects.requireNonNull(getCommand("feed")).setExecutor(utilityCommand);
             Objects.requireNonNull(getCommand("heal")).setExecutor(utilityCommand);
             Objects.requireNonNull(getCommand("enderchest")).setExecutor(utilityCommand);
             Objects.requireNonNull(getCommand("workbench")).setExecutor(utilityCommand);
             Objects.requireNonNull(getCommand("afk")).setExecutor(new AfkCommand(this::utilityConfig, afkManager, messages));
-            Objects.requireNonNull(getCommand("utility")).setExecutor(
-                    new UtilityMenuService(this::utilityConfig, messages, core.gui(), core.text(), afkManager, family));
-            Objects.requireNonNull(getCommand("trash")).setExecutor(new TrashService(this::utilityConfig, messages, core.text(), feedback));
+
+            UtilityMenuService utilityMenu = new UtilityMenuService(
+                    this::utilityConfig, messages, core.gui(), core.text(), afkManager, family);
+            Objects.requireNonNull(getCommand("utility")).setExecutor(utilityMenu);
+            Objects.requireNonNull(getCommand("trash")).setExecutor(
+                    new TrashService(this::utilityConfig, messages, core.text(), feedback));
+
+            adminData = new AdminDataStore(this, core.scheduler());
+            adminData.load();
+            AdminAuditService audit = new AdminAuditService(getLogger());
+            vanishService = new VanishService(this, this::utilityConfig, adminData, audit);
+            ModerationService moderation = new ModerationService(messages, audit);
+            PrisonService prison = new PrisonService(this, adminData, audit);
+            InventoryInspectionService inventory = new InventoryInspectionService(
+                    core.gui(), utilityMenu.itemFactory(), messages);
+            AdminMenuService adminMenu = new AdminMenuService(
+                    this, this::utilityConfig, messages, core.gui(), core.scheduler(), utilityMenu.itemFactory(),
+                    utilityMenu, afkManager, vanishService, moderation, prison, inventory, playerUtilities);
+            utilityMenu.setAdminCenterOpener(adminMenu::open);
+
+            AdminActionCommand adminActions = new AdminActionCommand(
+                    this::utilityConfig, messages, inventory, vanishService, moderation, prison);
+            Objects.requireNonNull(getCommand("invsee")).setExecutor(adminActions);
+            Objects.requireNonNull(getCommand("vanish")).setExecutor(adminActions);
+            Objects.requireNonNull(getCommand("kick")).setExecutor(adminActions);
+            Objects.requireNonNull(getCommand("ban")).setExecutor(adminActions);
+            Objects.requireNonNull(getCommand("unban")).setExecutor(adminActions);
+            Objects.requireNonNull(getCommand("prison")).setExecutor(adminActions);
             Objects.requireNonNull(getCommand("utilityadmin")).setExecutor(
-                    new UtilityAdminCommand(this, cooldowns, messages, afkManager, complements, family));
+                    new UtilityAdminCommand(this, cooldowns, messages, afkManager, complements, family, adminMenu));
 
             getServer().getPluginManager().registerEvents(this, this);
             getServer().getPluginManager().registerEvents(afkManager, this);
             getServer().getPluginManager().registerEvents(family, this);
+            getServer().getPluginManager().registerEvents(new VanishListener(this::utilityConfig, vanishService), this);
+            getServer().getPluginManager().registerEvents(inventory, this);
             afkManager.start();
             registerPlaceholderExpansion();
 
             api = new DefaultUtilityAPI();
             getServer().getServicesManager().register(PlexonUtilityAPI.class, api, this, ServicePriority.Normal);
-            coreBridge.ready("Core text/gui/scheduler/integrations shared; quiet-feedback active; family-ready="
-                    + family.readyCount() + "/" + family.totalCount() + "; enabled features: " + utilityConfig.enabledFeatures());
+            coreBridge.ready("Core text/gui/scheduler/integrations shared; admin-toolkit=" + utilityConfig.admin().enabled()
+                    + "; family-ready=" + family.readyCount() + "/" + family.totalCount()
+                    + "; enabled features: " + utilityConfig.enabledFeatures());
             getLogger().info("PlexonUtility " + getPluginMeta().getVersion() + " enabled with " + utilityConfig.enabledFeatures()
-                    + "; Core-native text/gui/scheduler/integrations; quiet-feedback=true; family-ready=" + family.readyCount() + "/" + family.totalCount()
+                    + "; Core-native text/gui/scheduler/integrations; admin-toolkit=" + utilityConfig.admin().enabled()
+                    + "; family-ready=" + family.readyCount() + "/" + family.totalCount()
                     + "; AFK scheduler=" + afkManager.schedulerCount()
                     + "; PlaceholderAPI=" + (placeholderExpansion != null));
         } catch (RuntimeException exception) {
@@ -107,6 +149,8 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             placeholderExpansion.unregister();
             placeholderExpansion = null;
         }
+        if (vanishService != null) vanishService.restoreOwnedVisibility();
+        if (adminData != null) adminData.close();
         if (afkManager != null) afkManager.close();
         if (feedback != null) feedback.close();
         if (cooldowns != null) cooldowns.clearAll();
@@ -123,16 +167,16 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         UtilityConfig candidateConfig = loadUtilityConfigCandidate();
         YamlConfiguration candidateMessages = messages.loadCandidate();
 
-        // Both candidates are fully parsed and validated before either live reference changes.
         messages.apply(candidateMessages);
         utilityConfig = candidateConfig;
         if (afkManager != null) afkManager.reload();
+        if (vanishService != null) vanishService.reload();
         if (complements != null) complements.refresh();
         if (family != null) family.refresh();
 
         if (coreBridge != null && coreBridge.core() != null) {
-            coreBridge.ready("Reloaded; Core shared services and quiet-feedback active; family-ready="
-                    + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
+            coreBridge.ready("Reloaded; admin-toolkit=" + candidateConfig.admin().enabled()
+                    + "; family-ready=" + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
                     + "; enabled features: " + candidateConfig.enabledFeatures());
         }
     }
@@ -152,10 +196,11 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
     private void registerPlaceholderExpansion() {
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") == null) return;
         UtilityPlaceholderExpansion expansion = new UtilityPlaceholderExpansion(
-                getPluginMeta().getVersion(), this::utilityConfig, afkTracker);
+                getPluginMeta().getVersion(), this::utilityConfig, afkTracker,
+                id -> vanishService != null && vanishService.isVanished(id));
         if (expansion.register()) {
             placeholderExpansion = expansion;
-            getLogger().info("PlaceholderAPI expansion registered: %plexonutility_afk%, %plexonutility_is_afk%");
+            getLogger().info("PlaceholderAPI expansion registered: %plexonutility_afk%, %plexonutility_is_afk%, %plexonutility_vanished%");
         } else {
             getLogger().warning("PlaceholderAPI was present but the PlexonUtility expansion could not be registered.");
         }
@@ -196,6 +241,11 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         @Override
         public boolean isAfk(UUID playerId) {
             return afkManager != null && afkManager.isAfk(playerId);
+        }
+
+        @Override
+        public boolean isVanished(UUID playerId) {
+            return vanishService != null && vanishService.isVanished(playerId);
         }
     }
 }

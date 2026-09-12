@@ -1,8 +1,10 @@
 # Essentials Feature Audit — PlexonUtility 1.0.0
 
-This document records only evidence available to the repository implementation agent. It does **not** claim access to the live PlexonCraft plugin directory, command map, Vault provider, player data, or production configuration.
+> **Superseding note — 2026-09-12 / PlexonUtility 3.3.0:** the historical 1.0 decision below that all moderation remain external is superseded only for the focused native 3.3 admin toolkit: self-vanish, kick, native profile ban/unban, read-only inventory inspection, one prison/holding waypoint, and selected lightweight player-management actions. Broad moderation history, mute, social spy, freeze, IP bans, appeals, cross-server moderation, rank/economy editing, nicknames, kits/mail, and specialist ownership remain external. See `docs/ADMIN_TOOLKIT_3.3_MIGRATION.md` and `releases/3.3.0.md`.
 
-| Feature | 1.0 owner/status | Production evidence | Action |
+This document otherwise preserves the original 1.0 repository audit as historical evidence. It does **not** claim access to the live PlexonCraft plugin directory, command map, Vault provider, player data, or production configuration.
+
+| Feature | 1.0 owner/status | Production evidence | Historical action |
 | --- | --- | --- | --- |
 | `/feed` | PlexonUtility — IMPLEMENTED | Specification identifies as required default utility candidate | Stage command ownership before Essentials removal |
 | `/heal` | PlexonUtility — IMPLEMENTED | Specification identifies as required default utility candidate | Stage command ownership before Essentials removal |
@@ -21,7 +23,7 @@ This document records only evidence available to the repository implementation a
 | `/spawn`, `/hub`, `/back`, `/warp`, `/tpa` | PlexonTravel | Separate module responsibility | Validate PlexonTravel PRIMARY before removal |
 | `/home`, `/sethome` | PlexonHomes | Separate module responsibility | Validate PlexonHomes PRIMARY before removal |
 | Economy/Vault provider | NOT UTILITY | Production provider unknown | **Critical blocker until audited** |
-| Moderation | Dedicated moderation provider | Production usage unknown | Keep external; do not absorb |
+| Moderation | Dedicated moderation provider | Production usage unknown | **Historical 1.0 decision; superseded only by the bounded 3.3 native set described above** |
 
 ## Required production follow-up
 
@@ -32,7 +34,8 @@ Before uninstalling or disabling Essentials on the live server:
 3. Identify the active Vault economy provider and balance storage.
 4. Audit active Essentials kits, mail, nicknames, moderation usage, and any custom MyCommand aliases.
 5. Validate PlexonHomes and PlexonTravel in PRIMARY mode.
-6. Run a staging boot with Essentials physically disabled/removed.
-7. Compare balances and critical plugin behavior, then run a soak/performance profile.
+6. For native 3.3 vanish, decide one authoritative vanish engine and migrate TAB/PlexonChats presentation rules before removing the previous provider.
+7. Run a staging boot with Essentials physically disabled/removed.
+8. Compare balances and critical plugin behavior, then run a soak/performance profile.
 
 Until those steps have evidence, full Essentials decommission remains **BLOCKED**.

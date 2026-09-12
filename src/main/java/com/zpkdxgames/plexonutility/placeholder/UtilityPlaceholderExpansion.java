@@ -7,17 +7,26 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 public final class UtilityPlaceholderExpansion extends PlaceholderExpansion {
     private final String version;
     private final Supplier<UtilityConfig> config;
     private final AfkTracker tracker;
+    private final Predicate<UUID> vanished;
 
     public UtilityPlaceholderExpansion(String version, Supplier<UtilityConfig> config, AfkTracker tracker) {
+        this(version, config, tracker, ignored -> false);
+    }
+
+    public UtilityPlaceholderExpansion(String version, Supplier<UtilityConfig> config, AfkTracker tracker,
+                                       Predicate<UUID> vanished) {
         this.version = version;
         this.config = config;
         this.tracker = tracker;
+        this.vanished = vanished == null ? ignored -> false : vanished;
     }
 
     @Override
@@ -49,6 +58,9 @@ public final class UtilityPlaceholderExpansion extends PlaceholderExpansion {
         }
         if (identifier.equalsIgnoreCase("is_afk")) {
             return Boolean.toString(afk);
+        }
+        if (identifier.equalsIgnoreCase("vanished")) {
+            return Boolean.toString(player != null && vanished.test(player.getUniqueId()));
         }
         return null;
     }
