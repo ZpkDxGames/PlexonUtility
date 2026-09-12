@@ -1,7 +1,7 @@
 package com.zpkdxgames.plexonutility.message;
 
+import com.zpkdxgames.plexoncore.text.TextService;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -30,6 +30,7 @@ public final class MessageService {
             "heal-other",
             "heal-unavailable",
             "enderchest-other",
+            "trash-open",
             "afk-self-on",
             "afk-self-off",
             "afk-announcement-on",
@@ -38,13 +39,15 @@ public final class MessageService {
             "reload-failed");
 
     private final JavaPlugin plugin;
-    private final MiniMessage miniMessage = MiniMessage.miniMessage();
+    private final TextService text;
     private final YamlConfiguration defaults;
     private volatile YamlConfiguration messages;
 
-    public MessageService(JavaPlugin plugin) {
+    public MessageService(JavaPlugin plugin, TextService text) {
         this.plugin = plugin;
+        this.text = text;
         this.defaults = loadBundledDefaults(plugin);
+        validateFormatting(defaults);
         this.messages = loadCandidate();
     }
 
@@ -57,11 +60,13 @@ public final class MessageService {
             throw new IllegalArgumentException("messages.yml could not be loaded: " + exception.getMessage(), exception);
         }
         applyDefaultsAndValidate(candidate, defaults);
+        validateFormatting(candidate);
         return candidate;
     }
 
     public void apply(YamlConfiguration candidate) {
         applyDefaultsAndValidate(candidate, defaults);
+        validateFormatting(candidate);
         messages = candidate;
     }
 
@@ -77,6 +82,14 @@ public final class MessageService {
         sender.sendMessage(render(key, replacements));
     }
 
+    public void sendRaw(CommandSender sender, String trustedTemplate) {
+        sendRaw(sender, trustedTemplate, Map.of());
+    }
+
+    public void sendRaw(CommandSender sender, String trustedTemplate, Map<String, ?> replacements) {
+        sender.sendMessage(text.renderTemplate(prefix() + trustedTemplate, replacements));
+    }
+
     public void broadcast(String key, Map<String, String> replacements) {
         Component component = render(key, replacements);
         for (Player player : plugin.getServer().getOnlinePlayers()) player.sendMessage(component);
@@ -84,12 +97,8 @@ public final class MessageService {
 
     public Component render(String key, Map<String, String> replacements) {
         YamlConfiguration catalog = messages;
-        String prefix = catalog.getString("prefix", "");
         String template = catalog.getString(key, "<red>Missing message: " + key + "</red>");
-        for (Map.Entry<String, String> entry : replacements.entrySet()) {
-            template = template.replace("<" + entry.getKey() + ">", escape(entry.getValue()));
-        }
-        return miniMessage.deserialize(prefix + template);
+        return text.renderTemplate(prefix(catalog) + template, replacements);
     }
 
     static void applyDefaultsAndValidate(YamlConfiguration candidate, YamlConfiguration defaults) {
@@ -106,6 +115,28 @@ public final class MessageService {
         }
     }
 
+    private void validateFormatting(YamlConfiguration candidate) {
+        for (String key : REQUIRED_KEYS) {
+            String value = candidate.getString(key, "");
+            String validationTemplate = value
+                    .replace("<player>", "player")
+                    .replace("<seconds>", "seconds")
+                    .replace("<reason>", "reason");
+            var result = text.validateMiniMessage(validationTemplate);
+            if (!result.valid()) {
+                throw new IllegalArgumentException("messages.yml key '" + key + "' has invalid MiniMessage: " + result.reason());
+            }
+        }
+    }
+
+    private String prefix() {
+        return prefix(messages);
+    }
+
+    private static String prefix(YamlConfiguration catalog) {
+        return catalog.getString("prefix", "");
+    }
+
     private static YamlConfiguration loadBundledDefaults(JavaPlugin plugin) {
         try (InputStream stream = plugin.getResource("messages.yml")) {
             if (stream == null) throw new IllegalStateException("Bundled messages.yml is missing");
@@ -116,10 +147,5 @@ public final class MessageService {
         } catch (IOException exception) {
             throw new IllegalStateException("Bundled messages.yml could not be read", exception);
         }
-    }
-
-    private static String escape(String value) {
-        if (value == null) return "";
-        return value.replace("\\", "\\\\").replace("<", "\\<").replace(">", "\\>");
     }
 }

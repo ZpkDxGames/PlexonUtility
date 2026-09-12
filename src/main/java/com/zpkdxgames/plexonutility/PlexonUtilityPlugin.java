@@ -10,9 +10,12 @@ import com.zpkdxgames.plexonutility.command.UtilityCommand;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.cooldown.CooldownService;
 import com.zpkdxgames.plexonutility.feature.Feature;
+import com.zpkdxgames.plexonutility.integration.ComplementService;
 import com.zpkdxgames.plexonutility.integration.CoreBridge;
+import com.zpkdxgames.plexonutility.menu.UtilityMenuService;
 import com.zpkdxgames.plexonutility.message.MessageService;
 import com.zpkdxgames.plexonutility.placeholder.UtilityPlaceholderExpansion;
+import com.zpkdxgames.plexonutility.trash.TrashService;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.EventHandler;
@@ -32,6 +35,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
     private CooldownService cooldowns;
     private MessageService messages;
     private CoreBridge coreBridge;
+    private ComplementService complements;
     private AfkTracker afkTracker;
     private AfkManager afkManager;
     private UtilityPlaceholderExpansion placeholderExpansion;
@@ -47,12 +51,14 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         try {
             utilityConfig = loadUtilityConfigCandidate();
             cooldowns = new CooldownService();
-            messages = new MessageService(this);
             coreBridge = new CoreBridge(this);
-            coreBridge.connect(utilityConfig.enabledFeatures());
+            PlexonCoreAPI core = coreBridge.connect(utilityConfig.enabledFeatures());
+            messages = new MessageService(this, core.text());
+            complements = new ComplementService(getServer().getPluginManager(), core.integrations());
+            complements.refresh();
 
             afkTracker = new AfkTracker();
-            afkManager = new AfkManager(this, this::utilityConfig, messages, afkTracker);
+            afkManager = new AfkManager(this, this::utilityConfig, messages, afkTracker, core.scheduler());
 
             UtilityCommand utilityCommand = new UtilityCommand(this::utilityConfig, cooldowns, messages);
             Objects.requireNonNull(getCommand("feed")).setExecutor(utilityCommand);
@@ -60,7 +66,9 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             Objects.requireNonNull(getCommand("enderchest")).setExecutor(utilityCommand);
             Objects.requireNonNull(getCommand("workbench")).setExecutor(utilityCommand);
             Objects.requireNonNull(getCommand("afk")).setExecutor(new AfkCommand(this::utilityConfig, afkManager, messages));
-            Objects.requireNonNull(getCommand("utilityadmin")).setExecutor(new UtilityAdminCommand(this, cooldowns, messages, afkManager));
+            Objects.requireNonNull(getCommand("utility")).setExecutor(new UtilityMenuService(this::utilityConfig, messages, core.gui(), core.text()));
+            Objects.requireNonNull(getCommand("trash")).setExecutor(new TrashService(this::utilityConfig, messages, core.text()));
+            Objects.requireNonNull(getCommand("utilityadmin")).setExecutor(new UtilityAdminCommand(this, cooldowns, messages, afkManager, complements));
 
             getServer().getPluginManager().registerEvents(this, this);
             getServer().getPluginManager().registerEvents(afkManager, this);
@@ -69,9 +77,10 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
 
             api = new DefaultUtilityAPI();
             getServer().getServicesManager().register(PlexonUtilityAPI.class, api, this, ServicePriority.Normal);
-            coreBridge.ready("Enabled features: " + utilityConfig.enabledFeatures());
+            coreBridge.ready("Core text/gui/scheduler shared; enabled features: " + utilityConfig.enabledFeatures());
             getLogger().info("PlexonUtility " + getPluginMeta().getVersion() + " enabled with " + utilityConfig.enabledFeatures()
-                    + "; AFK scheduler=" + afkManager.schedulerCount() + "; PlaceholderAPI=" + (placeholderExpansion != null));
+                    + "; Core-native text/gui/scheduler; AFK scheduler=" + afkManager.schedulerCount()
+                    + "; PlaceholderAPI=" + (placeholderExpansion != null));
         } catch (RuntimeException exception) {
             getLogger().severe("PlexonUtility failed to initialize: " + detail(exception));
             if (coreBridge != null) coreBridge.degraded("Initialization failed: " + detail(exception));
@@ -106,7 +115,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         if (afkManager != null) afkManager.reload();
 
         if (coreBridge != null && coreBridge.core() != null) {
-            coreBridge.ready("Reloaded; enabled features: " + candidateConfig.enabledFeatures());
+            coreBridge.ready("Reloaded; Core text/gui/scheduler shared; enabled features: " + candidateConfig.enabledFeatures());
         }
     }
 

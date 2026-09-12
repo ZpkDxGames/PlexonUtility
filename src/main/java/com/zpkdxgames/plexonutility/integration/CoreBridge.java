@@ -33,6 +33,10 @@ public final class CoreBridge {
         Set<String> capabilities = new LinkedHashSet<>();
         enabledFeatures.stream().map(Feature::id).forEach(capabilities::add);
         capabilities.add("utility-api");
+        capabilities.add("core-text");
+        capabilities.add("core-gui");
+        capabilities.add("core-scheduler");
+        capabilities.add("complement-diagnostics");
 
         ModuleDescriptor descriptor = new ModuleDescriptor(
                 MODULE_ID,
@@ -43,7 +47,7 @@ public final class CoreBridge {
                 ModuleVersionRange.parse(">=2.0 <3.0"),
                 capabilities,
                 ModuleState.STARTING,
-                "Initializing utility services",
+                "Initializing Core-native utility services",
                 Instant.now());
 
         var result = core.modules().register(descriptor);

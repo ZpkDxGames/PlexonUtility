@@ -1,9 +1,13 @@
 features:
+  # Core-native navigation surface powered by PlexonCore GuiService.
+  menu: true
   feed: true
   heal: true
   enderchest: true
   workbench: true
   afk: true
+  # Writable disposable inventory; contents are intentionally not persisted.
+  trash: true
 
 feed:
   food-level: 20

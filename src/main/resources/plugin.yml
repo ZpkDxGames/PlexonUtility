@@ -9,13 +9,18 @@ softdepend:
 loadbefore:
   - Essentials
 commands:
+  utility:
+    description: Open the PlexonUtility hub.
+    usage: /utility
+    aliases: [utilities, putility]
+    permission: plexonutility.menu
   feed:
     description: Restore hunger and saturation.
     usage: /feed [player]
     aliases: [pfeed]
     permission: plexonutility.feed
   heal:
-    description: Restore health and clear fire.
+    description: Restore health and clear configured effects.
     usage: /heal [player]
     aliases: [pheal]
     permission: plexonutility.heal
@@ -29,15 +34,22 @@ commands:
     usage: /workbench
     aliases: [wb, pworkbench]
     permission: plexonutility.workbench
+  trash:
+    description: Open a disposable trash inventory. Items left behind are destroyed.
+    usage: /trash
+    aliases: [disposal, ptrash]
+    permission: plexonutility.trash
   afk:
     description: Toggle your AFK state.
     usage: /afk
     permission: plexonutility.afk
   utilityadmin:
-    description: PlexonUtility diagnostics and reload.
-    usage: /utilityadmin <diagnostics|reload>
+    description: PlexonUtility diagnostics, integrations and reload.
+    usage: /utilityadmin <diagnostics|integrations|reload>
     permission: plexonutility.admin
 permissions:
+  plexonutility.menu:
+    default: true
   plexonutility.feed:
     default: true
   plexonutility.feed.others:
@@ -55,6 +67,8 @@ permissions:
   plexonutility.enderchest.others:
     default: op
   plexonutility.workbench:
+    default: true
+  plexonutility.trash:
     default: true
   plexonutility.afk:
     default: true
