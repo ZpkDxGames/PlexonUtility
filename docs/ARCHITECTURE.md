@@ -21,6 +21,7 @@ Capabilities include:
 - `afk-state`
 - `afk-event`
 - `placeholderapi`
+- `quiet-feedback`
 - `core-text`
 - `core-gui`
 - `core-scheduler`
