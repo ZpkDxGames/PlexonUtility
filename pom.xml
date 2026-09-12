@@ -5,15 +5,15 @@
 
   <groupId>com.zpkdxgames</groupId>
   <artifactId>PlexonUtility</artifactId>
-  <version>3.0.0</version>
+  <version>3.1.0-SNAPSHOT</version>
   <name>PlexonUtility</name>
-  <description>Core-native player utilities, PlexonFamily interoperability and ecosystem diagnostics for PlexonCraft.</description>
+  <description>Core-native player utilities, quiet HUD feedback, PlexonFamily interoperability and ecosystem diagnostics for PlexonCraft.</description>
   <url>https://github.com/ZpkDxGames/PlexonUtility</url>
 
   <properties>
     <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <project.build.outputTimestamp>2026-09-11T00:00:00Z</project.build.outputTimestamp>
+    <project.build.outputTimestamp>2026-09-12T00:00:00Z</project.build.outputTimestamp>
     <paper.version>26.2.build.121-stable</paper.version>
     <plexoncore.version>2.0.5</plexoncore.version>
     <junit.version>6.0.3</junit.version>

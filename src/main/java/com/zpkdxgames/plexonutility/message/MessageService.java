@@ -35,6 +35,8 @@ public final class MessageService {
             "trash-open",
             "afk-self-on",
             "afk-self-off",
+            "afk-bossbar",
+            "afk-return-actionbar",
             "afk-announcement-on",
             "afk-announcement-off",
             "reloaded",
@@ -44,6 +46,7 @@ public final class MessageService {
     private final TextService text;
     private final YamlConfiguration defaults;
     private final Map<String, Component> staticRenderCache = new ConcurrentHashMap<>();
+    private final Map<String, Component> staticUnprefixedCache = new ConcurrentHashMap<>();
     private volatile YamlConfiguration messages;
 
     public MessageService(JavaPlugin plugin, TextService text) {
@@ -74,6 +77,7 @@ public final class MessageService {
         validateFormatting(candidate);
         messages = candidate;
         staticRenderCache.clear();
+        staticUnprefixedCache.clear();
     }
 
     public void reload() {
@@ -102,11 +106,21 @@ public final class MessageService {
     }
 
     public Component render(String key, Map<String, String> replacements) {
+        return renderInternal(key, replacements, true);
+    }
+
+    /** Render a configured message without the plugin identity prefix, for HUD/social surfaces. */
+    public Component renderUnprefixed(String key, Map<String, String> replacements) {
+        return renderInternal(key, replacements, false);
+    }
+
+    private Component renderInternal(String key, Map<String, String> replacements, boolean includePrefix) {
         YamlConfiguration catalog = messages;
         String template = catalog.getString(key, "<red>Missing message: " + key + "</red>");
-        String complete = prefix(catalog) + template;
+        String complete = includePrefix ? prefix(catalog) + template : template;
         if (replacements == null || replacements.isEmpty()) {
-            return staticRenderCache.computeIfAbsent(key, ignored -> text.render(TextMode.MINIMESSAGE, complete));
+            Map<String, Component> cache = includePrefix ? staticRenderCache : staticUnprefixedCache;
+            return cache.computeIfAbsent(key, ignored -> text.render(TextMode.MINIMESSAGE, complete));
         }
         return text.renderTemplate(complete, replacements);
     }

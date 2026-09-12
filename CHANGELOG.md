@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.1.0 — UNRELEASED
+
+- Added a centralized quiet-feedback presentation service with no scheduler or per-player polling.
+- AFK self-state now uses a persistent bossbar instead of chat; returning active uses a short actionbar.
+- AFK social broadcasts are compact, prefixless by default, and exclude the player whose state changed.
+- Added short-return suppression so rapid AFK toggles do not create repeated public "is back" lines.
+- Routed successful self `/feed`, `/heal`, and `/trash` feedback to actionbar by default while keeping errors/admin diagnostics in chat.
+- Added configurable bossbar color/overlay, social-prefix behavior, actionbar policy, and AFK short-return suppression window.
+- Preserved safe MiniMessage rendering through `PlexonCore.text()` and added prefixless component caching for HUD/social surfaces.
+- Added lifecycle cleanup/reconciliation for AFK bossbars on activity, quit, reload, feature disable, and plugin shutdown.
+
 ## 3.0.0 — 2026-09-11
 
 - Redesigned `/utility` into a 4-row Plexon-style hub with live player/AFK state, permission-aware actions, PlexonFamily status, refresh/close controls, and admin diagnostics.

@@ -3,6 +3,7 @@ package com.zpkdxgames.plexonutility.command;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.cooldown.CooldownService;
 import com.zpkdxgames.plexonutility.feature.Feature;
+import com.zpkdxgames.plexonutility.feedback.FeedbackService;
 import com.zpkdxgames.plexonutility.message.MessageService;
 import org.bukkit.Bukkit;
 import org.bukkit.attribute.Attribute;
@@ -23,11 +24,18 @@ public final class UtilityCommand implements CommandExecutor {
     private final Supplier<UtilityConfig> config;
     private final CooldownService cooldowns;
     private final MessageService messages;
+    private final FeedbackService feedback;
     private final Function<String, Player> playerLookup;
     private final ToDoubleFunction<Player> maxHealthLookup;
 
+    /** Compatibility constructor; production wiring should supply FeedbackService. */
     public UtilityCommand(Supplier<UtilityConfig> config, CooldownService cooldowns, MessageService messages) {
-        this(config, cooldowns, messages, Bukkit::getPlayerExact, UtilityCommand::readMaxHealth);
+        this(config, cooldowns, messages, null, Bukkit::getPlayerExact, UtilityCommand::readMaxHealth);
+    }
+
+    public UtilityCommand(Supplier<UtilityConfig> config, CooldownService cooldowns, MessageService messages,
+                          FeedbackService feedback) {
+        this(config, cooldowns, messages, feedback, Bukkit::getPlayerExact, UtilityCommand::readMaxHealth);
     }
 
     UtilityCommand(
@@ -36,9 +44,20 @@ public final class UtilityCommand implements CommandExecutor {
             MessageService messages,
             Function<String, Player> playerLookup,
             ToDoubleFunction<Player> maxHealthLookup) {
+        this(config, cooldowns, messages, null, playerLookup, maxHealthLookup);
+    }
+
+    UtilityCommand(
+            Supplier<UtilityConfig> config,
+            CooldownService cooldowns,
+            MessageService messages,
+            FeedbackService feedback,
+            Function<String, Player> playerLookup,
+            ToDoubleFunction<Player> maxHealthLookup) {
         this.config = config;
         this.cooldowns = cooldowns;
         this.messages = messages;
+        this.feedback = feedback;
         this.playerLookup = playerLookup;
         this.maxHealthLookup = maxHealthLookup;
     }
@@ -67,7 +86,8 @@ public final class UtilityCommand implements CommandExecutor {
         target.setSaturation(cfg.feedSaturation());
         if (cfg.feedResetExhaustion()) target.setExhaustion(0.0F);
         if (self) cooldowns.start(target.getUniqueId(), Feature.FEED, cfg.feedCooldownNanos());
-        messages.send(sender, self ? "feed-self" : "feed-other", Map.of("player", target.getName()));
+        if (self && feedback != null) feedback.success(sender, "feed-self", Map.of("player", target.getName()));
+        else messages.send(sender, self ? "feed-self" : "feed-other", Map.of("player", target.getName()));
         return true;
     }
 
@@ -100,7 +120,8 @@ public final class UtilityCommand implements CommandExecutor {
             }
         }
         if (self) cooldowns.start(target.getUniqueId(), Feature.HEAL, cfg.healCooldownNanos());
-        messages.send(sender, self ? "heal-self" : "heal-other", Map.of("player", target.getName()));
+        if (self && feedback != null) feedback.success(sender, "heal-self", Map.of("player", target.getName()));
+        else messages.send(sender, self ? "heal-self" : "heal-other", Map.of("player", target.getName()));
         return true;
     }
 

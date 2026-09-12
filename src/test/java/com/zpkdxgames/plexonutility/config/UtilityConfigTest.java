@@ -28,6 +28,13 @@ class UtilityConfigTest {
         assertTrue(config.afk().announcementsEnabled());
         assertEquals("", config.afk().placeholderActive());
         assertEquals(" <gray>[AFK]</gray>", config.afk().placeholderAfk());
+        assertTrue(config.feedback().utilitySuccessActionbar());
+        assertFalse(config.feedback().socialEventPrefix());
+        assertTrue(config.feedback().afkBossbarEnabled());
+        assertEquals("YELLOW", config.feedback().afkBossbarColor());
+        assertEquals("PROGRESS", config.feedback().afkBossbarOverlay());
+        assertTrue(config.feedback().afkReturnActionbarEnabled());
+        assertEquals(8_000_000_000L, config.feedback().afkSuppressShortReturnNanos());
     }
 
     @Test
@@ -46,6 +53,31 @@ class UtilityConfigTest {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("afk.announcements.enabled", false);
         assertFalse(UtilityConfig.from(yaml).afk().announcementsEnabled());
+    }
+
+    @Test
+    void quietFeedbackCanBeCustomized() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("feedback.utility-success-actionbar", false);
+        yaml.set("feedback.social-events.prefix", true);
+        yaml.set("feedback.afk.bossbar.color", "green");
+        yaml.set("feedback.afk.bossbar.overlay", "notched_10");
+        yaml.set("feedback.afk.suppress-short-return-seconds", 12);
+
+        UtilityConfig config = UtilityConfig.from(yaml);
+
+        assertFalse(config.feedback().utilitySuccessActionbar());
+        assertTrue(config.feedback().socialEventPrefix());
+        assertEquals("GREEN", config.feedback().afkBossbarColor());
+        assertEquals("NOTCHED_10", config.feedback().afkBossbarOverlay());
+        assertEquals(12_000_000_000L, config.feedback().afkSuppressShortReturnNanos());
+    }
+
+    @Test
+    void rejectsUnknownBossbarColor() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("feedback.afk.bossbar.color", "orange");
+        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
     }
 
     @Test

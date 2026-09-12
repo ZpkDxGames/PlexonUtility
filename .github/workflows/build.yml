@@ -80,6 +80,7 @@ jobs:
             'com/zpkdxgames/plexonutility/api/event/AfkStateChangeEvent.class' \
             'com/zpkdxgames/plexonutility/afk/AfkManager.class' \
             'com/zpkdxgames/plexonutility/afk/AfkTracker.class' \
+            'com/zpkdxgames/plexonutility/feedback/FeedbackService.class' \
             'com/zpkdxgames/plexonutility/integration/ComplementService.class' \
             'com/zpkdxgames/plexonutility/integration/FamilyCompatibilityService.class' \
             'com/zpkdxgames/plexonutility/menu/UtilityMenuService.class' \
