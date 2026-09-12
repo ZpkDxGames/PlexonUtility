@@ -132,6 +132,7 @@ jobs:
             'com/zpkdxgames/plexonutility/api/event/AfkStateChangeEvent.class' \
             'com/zpkdxgames/plexonutility/afk/AfkManager.class' \
             'com/zpkdxgames/plexonutility/afk/AfkTracker.class' \
+            'com/zpkdxgames/plexonutility/feedback/FeedbackService.class' \
             'com/zpkdxgames/plexonutility/integration/ComplementService.class' \
             'com/zpkdxgames/plexonutility/integration/FamilyCompatibilityService.class' \
             'com/zpkdxgames/plexonutility/menu/UtilityMenuService.class' \
@@ -176,6 +177,7 @@ jobs:
           paper_api=26.2.build.121-stable
           plexoncore_compile_boundary=2.0.5
           core_services=text,gui,scheduler,integrations
+          utility_capabilities=quiet-feedback,afk-state,afk-event,placeholderapi,family-compatibility
           source_closure=VERIFIED
           runtime_deployment=FOLLOW_UP_NON_BLOCKING
           EOF

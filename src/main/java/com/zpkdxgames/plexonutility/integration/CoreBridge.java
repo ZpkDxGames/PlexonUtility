@@ -36,6 +36,7 @@ public final class CoreBridge {
         capabilities.add("afk-state");
         capabilities.add("afk-event");
         capabilities.add("placeholderapi");
+        capabilities.add("quiet-feedback");
         capabilities.add("core-text");
         capabilities.add("core-gui");
         capabilities.add("core-scheduler");

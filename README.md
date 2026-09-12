@@ -1,68 +1,72 @@
 # PlexonUtility
 
-Core-native player utilities, PlexonFamily interoperability, and ecosystem diagnostics for PlexonCraft.
+Core-native player utilities, quiet HUD feedback, PlexonFamily interoperability, and ecosystem diagnostics for PlexonCraft.
 
-## 3.0 stable surface
+## 3.1 stable surface
 
-PlexonUtility 3.0 keeps small convenience actions together while using PlexonCore for shared runtime infrastructure:
+PlexonUtility 3.1 keeps generic convenience actions together while delegating shared infrastructure to PlexonCore:
 
-- `/utility` — redesigned 4-row Plexon utility hub with player status, live AFK state, integration status, refresh/close controls, and admin diagnostics
+- `/utility` — 4-row Plexon utility hub with player status, AFK state, utility availability, family readiness, PlexonHomes navigation, refresh/close controls, and admin diagnostics
 - `/feed [player]`
 - `/heal [player]`
 - `/enderchest [player]` (`/ec`)
 - `/workbench`
-- `/trash` — disposable 27-slot inventory; contents left behind are destroyed on close
-- `/afk` — manual and automatic AFK state with PlaceholderAPI and a public AFK transition event
+- `/trash` — disposable writable inventory; remaining contents are destroyed on close
+- `/afk` — manual and automatic AFK state with bossbar/actionbar feedback, PlaceholderAPI, and a public AFK transition event
 - `/utilityadmin diagnostics|family|integrations|reload`
 
-All configurable chat output uses MiniMessage through `PlexonCore.text()`. Static configured messages are parsed once and cached until reload; dynamic values use safe MiniMessage tag resolvers rather than string concatenation.
+## Quiet feedback policy
+
+3.1 moves routine personal feedback away from chat:
+
+- persistent personal state → bossbar
+- short successful self-actions → actionbar
+- social state changes → compact prefixless chat by default
+- errors, permission failures, cooldowns, and diagnostics → normal prefixed chat
+
+AFK behavior by default:
+
+- entering AFK shows a persistent `AFK • You are currently away` bossbar to the affected player;
+- other online players receive a compact `<player> is now AFK` line without the PlexonUtility prefix;
+- returning active removes the bossbar and shows `You are active again` in the actionbar;
+- rapid AFK cycles suppress the public return line to reduce chat spam;
+- the player whose state changed never receives their own public AFK announcement.
+
+Successful self `/feed`, `/heal`, and `/trash` feedback also uses the actionbar by default. These policies are configurable under `feedback:` in `config.yml`.
+
+The feedback layer creates no scheduler or animation task. AFK bossbars are lifecycle-managed on active transition, quit, reload/feature disable, and plugin shutdown.
+
+## MiniMessage and PlexonCore
+
+PlexonUtility does not create its own MiniMessage parser. Text rendering uses `PlexonCore.text()`:
+
+- configured MiniMessage is validated at startup/reload;
+- prefixed and prefixless static components are cached until reload;
+- runtime values use safe `TextService.renderTemplate(...)` insertion rather than parsing user/runtime values as MiniMessage;
+- missing keys introduced by upgrades are copied from bundled defaults into existing `messages.yml` files without overwriting customized values.
+
+The module publishes capabilities through PlexonCore including `utility-api`, `afk-state`, `afk-event`, `placeholderapi`, `quiet-feedback`, `core-text`, `core-gui`, `core-scheduler`, `core-integrations`, `family-compatibility`, and `complement-diagnostics`.
 
 ## PlexonFamily interoperability
 
-PlexonUtility uses `PlexonCore.integrations()` as the shared compatibility registry. Family discovery happens on startup, reload, and plugin enable/disable events only; there is no integration polling task.
+PlexonUtility uses `PlexonCore.integrations()` as the shared compatibility registry. Discovery refreshes on startup, explicit reload/diagnostics, and plugin enable/disable events; there is no recurring compatibility poll.
 
-The 3.0 compatibility catalog includes:
-
-- PlexonBackpacks
-- PlexonBlacksmith
-- PlexonChats
-- PlexonCrates
-- PlexonGPFlags
-- PlexonHomes
-- PlexonJobs
-- PlexonKeys
-- PlexonPanel
-- PlexonQuests
-- PlexonRanks
-- PlexonShops
-- PlexonSkills
-- PlexonSpawners
-- PlexonTools
-- PlexonTravel
+Known family products include PlexonBackpacks, PlexonBlacksmith, PlexonChats, PlexonCrates, PlexonGPFlags, PlexonHomes, PlexonJobs, PlexonKeys, PlexonPanel, PlexonQuests, PlexonRanks, PlexonShops, PlexonSkills, PlexonSpawners, PlexonTools, and PlexonTravel.
 
 `/utilityadmin family` reports the live registry view.
 
-### PlexonHomes integration
+### PlexonHomes integration and rank limits
 
-PlexonHomes remains the authoritative home/data/teleport service. PlexonUtility does not create a competing `/home`, `/homes`, or home database. When PlexonHomes is available, the Utility hub exposes a **Homes** entry that opens the authoritative `/homes` GUI.
+PlexonHomes remains authoritative for home persistence, limits, `/home`, `/homes`, and teleport safety. PlexonUtility only exposes the existing PlexonHomes `/homes` GUI from the Utility hub when the integration is ready.
 
-PlexonHomes already exposes rank-friendly numeric home limits:
+PlexonHomes supports rank-friendly numeric limits:
 
 ```text
 plexonhomes.limit.<N>
 plexonhomes.limit.unlimited
 ```
 
-The highest effective numeric permission wins. If no numeric permission is present, PlexonHomes uses its configured default. `plexonhomes.limit.unlimited` overrides numeric limits. This means PlexonRanks can grant progressively larger limits without a hard dependency or duplicated rank logic, for example:
-
-```text
-plexonhomes.limit.3
-plexonhomes.limit.5
-plexonhomes.limit.10
-plexonhomes.limit.15
-```
-
-The homes browser itself uses `plexonhomes.gui`.
+The highest active numeric permission wins; `plexonhomes.limit.unlimited` overrides numeric values. PlexonRanks or LuckPerms can therefore grant progressively larger limits without hard-coding rank logic into PlexonUtility.
 
 ## AFK interoperability
 
@@ -73,52 +77,15 @@ PlaceholderAPI outputs:
 %plexonutility_is_afk%
 ```
 
-`%plexonutility_afk%` returns the configured display value, while `%plexonutility_is_afk%` returns `true` or `false` and is suitable for TAB output replacements.
+`%plexonutility_afk%` returns the configured display value. `%plexonutility_is_afk%` returns `true` or `false`, making it suitable for TAB `placeholder-output-replacements`.
 
-Other PlexonFamily plugins can consume `PlexonUtilityAPI#isAfk(UUID)` or listen for `AfkStateChangeEvent`. The event is informational, non-cancellable, and fired on the primary thread for manual, timeout, and activity transitions. Consumers therefore do not need to poll AFK state or implement their own AFK detector.
-
-## Message migration and MiniMessage safety
-
-PlexonUtility 3.0 fixes upgrades from older `messages.yml` files:
-
-- missing required keys are copied from the bundled defaults into the existing file;
-- existing customized values are preserved;
-- migrated keys are persisted to disk;
-- invalid MiniMessage still fails closed at startup/reload;
-- failed reloads keep the previous known-good runtime state;
-- static messages are component-cached until reload;
-- dynamic values are inserted as plain components with `PlexonCore.text().renderTemplate(...)`.
-
-This prevents old installations from displaying `Missing message: ...` after a release introduces new message keys.
-
-## PlexonCore 2 architecture
-
-PlexonUtility does not create duplicate shared infrastructure:
-
-- text rendering and safe template values → `PlexonCore.text()`
-- navigation GUI routing/session tracking → `PlexonCore.gui()`
-- async-to-primary handoff → `PlexonCore.scheduler()`
-- module lifecycle/capabilities → `PlexonCore.modules()`
-- family/external integration visibility → `PlexonCore.integrations()`
-
-The 3.0 line compiles against the stable PlexonCore `2.0.5` boundary and uses owner-aware module state updates and cleanup.
-
-The AFK system retains one bounded shared repeating scan for online players. There is never one scheduler per player, no filesystem/database I/O on activity events, and AFK state remains intentionally ephemeral.
+Other plugins can also consume `PlexonUtilityAPI#isAfk(UUID)` or listen for `AfkStateChangeEvent`. The event is informational, non-cancellable, and emitted on the primary thread after the AFK state changes.
 
 ## Specialist ownership boundary
 
-PlexonUtility deliberately does **not** reimplement mature specialist systems. `/utilityadmin integrations` detects and publishes availability for:
+PlexonUtility does not reimplement mature specialist systems. `/utilityadmin integrations` detects and publishes availability for areas such as claims/regions, CoreProtect, LuckPerms, configurable menus, anti-cheat, display/HUD plugins, spark/Chunky, and proximity voice.
 
-- land/regions: GriefPrevention, Lands, Towny, WorldGuard
-- block audit/rollback: CoreProtect
-- permissions: LuckPerms
-- configurable menu builders: DeluxeMenus, ChestCommands
-- anti-cheat: GrimAC, Vulcan
-- display/HUD: TAB, FancyHolograms, DecentHolograms
-- profiling/pre-generation: spark, Chunky
-- proximity voice: Simple Voice Chat / voicechat
-
-Dedicated Plexon products keep their own data and gameplay authority. PlexonUtility may surface their entry points/status but does not duplicate their persistence or transaction logic.
+Dedicated Plexon products retain their own data, transaction, and gameplay authority.
 
 ## Runtime
 
@@ -129,19 +96,20 @@ Dedicated Plexon products keep their own data and gameplay authority. PlexonUtil
 - PlexonHomes optional integration
 - no plugin-owned database
 - in-memory monotonic cooldowns
-- one shared AFK scan only when AFK auto-timeout is enabled
+- one shared AFK timeout scan only when automatic AFK is enabled
+- no feedback scheduler or per-player repeating task
 
 ## Build and release
 
-CI downloads the immutable `PlexonCore-2.0.5.jar`, verifies its pinned SHA-256, installs it only into the CI-local Maven repository, then runs:
+CI downloads the immutable `PlexonCore-2.0.5.jar`, verifies its pinned SHA-256, installs it into the CI-local Maven repository, then runs:
 
 ```bash
 mvn -B -ntp clean verify
 ```
 
-The stable artifact is `target/PlexonUtility-3.0.0.jar`. CI verifies Java class major `69`, Paper `26.2` metadata, required 3.0 classes/resources, command descriptors, all tests, SHA-256 output, and that Core/Paper/Bukkit/PlaceholderAPI/Adventure runtime classes are not shaded into the JAR.
+The stable artifact is `target/PlexonUtility-3.1.0.jar`. CI verifies Java class major `69`, Paper `26.2` metadata, required runtime classes/resources, command descriptors, all tests, SHA-256 output, and that Core/Paper/Bukkit/PlaceholderAPI/Adventure runtime classes are not shaded into the JAR.
 
-The stable release workflow only publishes an exact `main` commit with a stable Maven version, matching release notes, and a previously unused version tag.
+The stable release workflow publishes only an exact `main` commit with a stable Maven version, matching release notes, and a previously unused tag.
 
 ## Permissions
 
