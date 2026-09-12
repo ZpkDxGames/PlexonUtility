@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.2.0 — 2026-09-12
+
+- Rebuilt `/utility` as a compact 45-slot premium PlexonCraft control hub with restrained green → cyan framing and clearer visual hierarchy.
+- Added detailed state-aware cards for Feed, Heal, Ender Chest, AFK, Workbench, Trash, and PlexonHomes navigation.
+- Added explicit `AVAILABLE`, `NO PERMISSION`, `FEATURE DISABLED`, `INTEGRATION MISSING`, `TEMPORARILY UNAVAILABLE`, and `ADMIN ONLY` presentation rules.
+- Added a live player profile summary with AFK state and available-utility count.
+- Added dedicated PlexonFamily, Help, and admin Diagnostics submenus with consistent Back/Refresh/Close navigation.
+- Preserved PlexonHomes ownership and the `plexonhomes.limit.<N>` / `plexonhomes.limit.unlimited` contract without duplicating home-limit logic.
+- Preserved the 3.1 quiet-feedback AFK bossbar/actionbar/social model and kept Trash as a writable non-Core navigation inventory.
+- Kept all GUI routing on `PlexonCore.gui()` and all MiniMessage/template rendering on `PlexonCore.text()` with no new scheduler, poller, parser, or inventory listener.
+- Added deterministic availability-state regression tests and required the new menu model in canonical build/release distribution verification.
+
 ## 3.1.0 — 2026-09-12
 
 - Added a centralized quiet-feedback presentation service with no scheduler or per-player polling.

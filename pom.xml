@@ -5,7 +5,7 @@
 
   <groupId>com.zpkdxgames</groupId>
   <artifactId>PlexonUtility</artifactId>
-  <version>3.1.0</version>
+  <version>3.2.0</version>
   <name>PlexonUtility</name>
   <description>Core-native player utilities, quiet HUD feedback, PlexonFamily interoperability and ecosystem diagnostics for PlexonCraft.</description>
   <url>https://github.com/ZpkDxGames/PlexonUtility</url>

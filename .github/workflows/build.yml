@@ -83,6 +83,7 @@ jobs:
             'com/zpkdxgames/plexonutility/feedback/FeedbackService.class' \
             'com/zpkdxgames/plexonutility/integration/ComplementService.class' \
             'com/zpkdxgames/plexonutility/integration/FamilyCompatibilityService.class' \
+            'com/zpkdxgames/plexonutility/menu/UtilityMenuModel.class' \
             'com/zpkdxgames/plexonutility/menu/UtilityMenuService.class' \
             'com/zpkdxgames/plexonutility/trash/TrashService.class' \
             'com/zpkdxgames/plexonutility/placeholder/UtilityPlaceholderExpansion.class'; do
