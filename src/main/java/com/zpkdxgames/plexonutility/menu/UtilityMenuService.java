@@ -144,7 +144,8 @@ public final class UtilityMenuService implements CommandExecutor {
                         "<red>NO PERMISSION</red> <gray>• rank/permission required</gray>",
                         "<red>FEATURE DISABLED</red> <gray>• disabled by server config</gray>",
                         "<gray>INTEGRATION MISSING</gray> <gray>• provider is not active</gray>",
-                        "<yellow>TEMPORARILY UNAVAILABLE</yellow> <gray>• provider is degraded</gray>")), click -> { });
+                        "<yellow>TEMPORARILY UNAVAILABLE</yellow> <gray>• provider is degraded</gray>",
+                        "<red>ADMIN ONLY</red> <gray>• restricted diagnostics</gray>")), click -> { });
 
         builder.button(13, icon(Material.RED_BED,
                 BRAND_OPEN + "Homes Ownership" + BRAND_CLOSE,
@@ -153,7 +154,7 @@ public final class UtilityMenuService implements CommandExecutor {
                         "<gray>PlexonHomes owns persistence, limits,</gray>",
                         "<gray>safety rules and teleport behavior.</gray>",
                         "",
-                        "<dark_gray>Rank limits remain plexonhomes.limit.&lt;N&gt;</dark_gray>")), click -> { });
+                        "<dark_gray>Rank limits use plexonhomes.limit.N / unlimited.</dark_gray>")), click -> { });
 
         builder.button(15, icon(Material.LAVA_BUCKET,
                 "<red><bold>Trash Safety</bold></red>",
@@ -177,7 +178,10 @@ public final class UtilityMenuService implements CommandExecutor {
                         "<yellow>Use Refresh</yellow> <gray>for an explicit rescan.</gray>")), click -> openFamily(click.player()));
 
         builder.button(36, backIcon(), click -> open(click.player()));
-        builder.button(40, refreshIcon(), click -> openHelp(click.player()));
+        builder.button(40, refreshIcon(), click -> {
+            family.refresh();
+            openHelp(click.player());
+        });
         builder.button(44, closeIcon(), click -> click.player().closeInventory());
         builder.open(player);
     }
@@ -468,7 +472,7 @@ public final class UtilityMenuService implements CommandExecutor {
     }
 
     private ItemStack diagnosticsIcon() {
-        return icon(Material.REDSTONE_COMPARATOR,
+        return icon(Material.COMPARATOR,
                 "<red><bold>Admin Diagnostics</bold></red>",
                 List.of(
                         "<gray>Inspect Utility runtime health.</gray>",
