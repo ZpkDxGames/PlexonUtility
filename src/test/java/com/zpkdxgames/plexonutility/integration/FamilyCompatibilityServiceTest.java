@@ -17,5 +17,7 @@ class FamilyCompatibilityServiceTest {
         assertTrue(FamilyCompatibilityService.isFamilyPlugin("PlexonHomes"));
         assertTrue(FamilyCompatibilityService.isFamilyPlugin("PlexonRanks"));
         assertFalse(FamilyCompatibilityService.isFamilyPlugin("Essentials"));
+        assertEquals("PLEXON_HOMES", FamilyCompatibilityService.integrationIdFor("plexonhomes").orElseThrow());
+        assertTrue(FamilyCompatibilityService.integrationIdFor("Essentials").isEmpty());
     }
 }

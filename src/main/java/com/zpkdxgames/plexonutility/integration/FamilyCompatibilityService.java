@@ -6,12 +6,14 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.event.server.PluginEnableEvent;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -69,11 +71,25 @@ public final class FamilyCompatibilityService implements Listener {
 
     @EventHandler
     public void onPluginDisable(PluginDisableEvent event) {
-        if (isFamilyPlugin(event.getPlugin().getName())) refresh();
+        Plugin disabled = event.getPlugin();
+        integrationIdFor(disabled.getName()).ifPresent(id -> integrations.publish(
+                id,
+                disabled.getName(),
+                disabled.getPluginMeta().getVersion(),
+                IntegrationState.DEGRADED,
+                Set.of("plexon-family"),
+                "Installed but disabled"));
     }
 
     static boolean isFamilyPlugin(String pluginName) {
         return FAMILY.containsValue(pluginName);
+    }
+
+    static Optional<String> integrationIdFor(String pluginName) {
+        return FAMILY.entrySet().stream()
+                .filter(entry -> entry.getValue().equalsIgnoreCase(pluginName))
+                .map(Map.Entry::getKey)
+                .findFirst();
     }
 
     static Map<String, String> knownFamilyPlugins() {

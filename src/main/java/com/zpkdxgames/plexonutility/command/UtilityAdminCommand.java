@@ -114,6 +114,8 @@ public final class UtilityAdminCommand implements CommandExecutor {
                     "plugin", status.pluginName(),
                     "version", status.version()));
         }
-        messages.sendRaw(sender, "<gray>Homes limit contract:</gray> <white>plexonhomes.limit.&lt;N&gt;</white> <dark_gray>or</dark_gray> <white>plexonhomes.limit.unlimited</white>");
+        messages.sendRaw(sender,
+                "<gray>Homes limit contract:</gray> <white><numeric></white> <dark_gray>or</dark_gray> <white><unlimited></white>",
+                Map.of("numeric", "plexonhomes.limit.<N>", "unlimited", "plexonhomes.limit.unlimited"));
     }
 }
