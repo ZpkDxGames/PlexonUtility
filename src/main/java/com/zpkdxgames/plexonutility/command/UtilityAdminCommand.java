@@ -69,7 +69,7 @@ public final class UtilityAdminCommand implements CommandExecutor {
     private void diagnostics(CommandSender sender) {
         UtilityConfig cfg = plugin.utilityConfig();
         PlexonCoreAPI core = plugin.core();
-        messages.sendRaw(sender, "<gradient:#57E389:#22D3EE><bold>3.0 Diagnostics</bold></gradient>");
+        messages.sendRaw(sender, "<gradient:#57E389:#22D3EE><bold>PlexonUtility Diagnostics</bold></gradient>");
         messages.sendRaw(sender, "<gray>Plugin:</gray> <white><version></white>", Map.of("version", plugin.getPluginMeta().getVersion()));
         messages.sendRaw(sender, "<gray>Core:</gray> <white><core></white>", Map.of("core", core == null ? "UNAVAILABLE" : core.version().pluginVersion() + " / API " + core.version().apiVersion()));
         messages.sendRaw(sender, "<gray>Module:</gray> <white><state></white>", Map.of("state", core == null ? "UNAVAILABLE" : core.modules().find("utility").map(view -> view.state().name()).orElse("MISSING")));
@@ -82,6 +82,13 @@ public final class UtilityAdminCommand implements CommandExecutor {
         messages.sendRaw(sender, "<gray>AFK tracked/afk:</gray> <white><tracked>/<afk></white>", Map.of("tracked", afk.trackedPlayers(), "afk", afk.afkPlayers()));
         messages.sendRaw(sender, "<gray>AFK shared schedulers:</gray> <white><count></white>", Map.of("count", afk.schedulerCount()));
         messages.sendRaw(sender, "<gray>AFK auto-timeout:</gray> <white><value></white>", Map.of("value", cfg.afk().autoTimeoutEnabled() ? (cfg.afk().timeoutNanos() / 1_000_000_000L) + "s" : "DISABLED"));
+        messages.sendRaw(sender, "<gray>AFK bossbar:</gray> <white><state></white> <dark_gray>•</dark_gray> <white><color>/<overlay></white>", Map.of(
+                "state", cfg.feedback().afkBossbarEnabled() ? "ENABLED" : "DISABLED",
+                "color", cfg.feedback().afkBossbarColor(),
+                "overlay", cfg.feedback().afkBossbarOverlay()));
+        messages.sendRaw(sender, "<gray>Quiet self success:</gray> <white><state></white>", Map.of("state", cfg.feedback().utilitySuccessActionbar() ? "ACTIONBAR" : "CHAT"));
+        messages.sendRaw(sender, "<gray>Social event prefix:</gray> <white><state></white>", Map.of("state", cfg.feedback().socialEventPrefix() ? "ENABLED" : "DISABLED"));
+        messages.sendRaw(sender, "<gray>AFK short-return suppression:</gray> <white><seconds>s</white>", Map.of("seconds", cfg.feedback().afkSuppressShortReturnNanos() / 1_000_000_000L));
         messages.sendRaw(sender, "<gray>AFK state persistence:</gray> <white>EPHEMERAL</white>");
         messages.sendRaw(sender, "<gray>PlaceholderAPI:</gray> <white><state></white>", Map.of("state", plugin.placeholderRegistered() ? "REGISTERED" : "UNAVAILABLE"));
         messages.sendRaw(sender, "<gray>PlexonFamily integrations:</gray> <white><ready>/<total></white>", Map.of("ready", family.readyCount(), "total", family.totalCount()));
