@@ -78,7 +78,7 @@ class ModerationServiceTest {
                 service.ban(actor, target, parsed, "Griefing", "fallback"));
 
         verify(online).ban("Griefing", (Duration) null, "Console", true);
-        verify(audit).log("BAN", actor, target, "duration=Permanent reason=Griefing");
+        verify(audit).log("BAN", actor, target, "duration=permanent reason=Griefing");
     }
 
     @Test void temporaryOfflineBanUsesNativeOfflineProfileAuthority() {
