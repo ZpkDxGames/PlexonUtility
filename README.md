@@ -1,56 +1,84 @@
 # PlexonUtility
 
-Core-native, intentionally small player utility module for PlexonCraft.
+Core-native player utilities and ecosystem complement diagnostics for PlexonCraft.
 
-## Phase 2 candidate
+## 2.0 stable surface
 
-Current source candidate: `1.0.1-rc.1`.
+PlexonUtility 2.0 keeps small convenience actions together while moving shared runtime work into PlexonCore:
 
-PlexonUtility owns only:
-
+- `/utility` — compact Plexon-style utility hub powered by `PlexonCore.gui()`
 - `/feed [player]`
 - `/heal [player]`
 - `/enderchest [player]` (`/ec`)
 - `/workbench`
-- `/utilityadmin diagnostics`
-- `/utilityadmin reload`
+- `/trash` — disposable 27-slot inventory; contents left behind are destroyed on close
+- `/afk` — manual and automatic AFK state with PlaceholderAPI support
+- `/utilityadmin diagnostics|integrations|reload`
 
-It does **not** own homes, spawn/hub/back/warps, repair/enchant/combine, chat, ranks, economy, jobs, skills, kits, mail, moderation, vanish, claim flags, server control, or other dedicated Plexon product responsibilities.
+All configurable chat output uses MiniMessage through `PlexonCore.text()`. The default PlexonUtility identity uses the Plexon green→cyan gradient `#57E389 → #22D3EE`.
 
-AFK, `/anvil`, `/hat`, and `/trash` remain deferred because the current product audit did not establish enough production value to justify expanding the runtime surface.
+## PlexonCore 2.0 architecture
 
-See `docs/PHASE2_PRODUCT_DECISION.md` for the ownership review and activation rationale.
+PlexonUtility does not create duplicate shared infrastructure:
+
+- text rendering and safe template values → `PlexonCore.text()`
+- navigation GUI routing/session tracking → `PlexonCore.gui()`
+- async-to-primary handoff → `PlexonCore.scheduler()`
+- module lifecycle/capabilities → `PlexonCore.modules()`
+- external complement visibility → `PlexonCore.integrations()`
+
+The AFK system retains one bounded shared repeating scan for online players. There is never one scheduler per player, no filesystem/database I/O on activity events, and AFK state remains intentionally ephemeral.
+
+## Specialist ownership boundary
+
+PlexonUtility deliberately does **not** reimplement mature specialist systems. `/utilityadmin integrations` detects and publishes availability for:
+
+- land/regions: GriefPrevention, Lands, Towny, WorldGuard
+- block audit/rollback: CoreProtect
+- permissions: LuckPerms
+- configurable menu builders: DeluxeMenus, ChestCommands
+- anti-cheat: GrimAC, Vulcan
+- display/HUD: TAB, FancyHolograms, DecentHolograms
+- profiling/pre-generation: spark, Chunky
+- proximity voice: Simple Voice Chat / voicechat
+
+Dedicated Plexon products also keep their existing ownership boundaries: travel, homes, shops, jobs, skills, tools, ranks, chats, quests, crates, backpacks, spawners, keys, blacksmith, claim flags, and Panel are not duplicated here.
 
 ## Runtime
 
 - Paper `26.2`
 - Java `25`
 - PlexonCore `2.0.0` Runtime API (`depend: PlexonCore`)
-- No database
-- No repeating scheduler
-- In-memory monotonic cooldowns only
+- PlaceholderAPI optional
+- no plugin-owned database
+- in-memory monotonic cooldowns
+- one shared AFK scan only when AFK auto-timeout is enabled
 
-## Correctness policy
+## Configuration and reload safety
 
-- `/heal` uses the player's actual max-health attribute and rejects dead/invalid player state.
-- named target forms use exact online-player lookup and separate `.others` permissions.
-- configuration types and numeric ranges are validated strictly.
-- reload parses and validates both configuration files before applying either candidate.
-- failed reloads retain the previous known-good runtime state.
+- feature toggles are independent
+- invalid types/ranges are rejected instead of coerced
+- `config.yml` and `messages.yml` are completely parsed before live state changes
+- MiniMessage formatting is validated at startup/reload
+- failed reloads keep the previous known-good runtime state
+- runtime placeholder values are inserted as plain components rather than parsed as MiniMessage
 
-## Build
+## Build and release
 
-CI downloads the immutable `PlexonCore-2.0.0.jar`, verifies its pinned SHA-256, installs it into the CI-local Maven repository, then runs:
+CI downloads the immutable `PlexonCore-2.0.0.jar`, verifies its pinned SHA-256, installs it only into the CI-local Maven repository, then runs:
 
 ```bash
 mvn -B -ntp clean verify
 ```
 
-The candidate distribution is `target/PlexonUtility-1.0.1-rc.1.jar`. Core, Paper/Bukkit, PlaceholderAPI, and Adventure runtime classes must not be shaded into the JAR. CI also verifies Java class major `69` and all required plugin resources.
+The stable artifact is `target/PlexonUtility-2.0.0.jar`. CI verifies Java class major `69`, Paper `26.2` metadata, required 2.0 classes/resources, command descriptors, all tests, SHA-256 output, and that Core/Paper/Bukkit/PlaceholderAPI/Adventure runtime classes are not shaded into the JAR.
+
+The `release/stable` workflow only publishes when its commit is exactly equal to `main`, the Maven version is stable, `releases/2.0.0.md` exists, and tag `v2.0.0` does not already exist.
 
 ## Permissions
 
 ```text
+plexonutility.menu
 plexonutility.feed
 plexonutility.feed.others
 plexonutility.feed.cooldown.bypass
@@ -60,21 +88,9 @@ plexonutility.heal.cooldown.bypass
 plexonutility.enderchest
 plexonutility.enderchest.others
 plexonutility.workbench
+plexonutility.trash
+plexonutility.afk
+plexonutility.afk.auto.bypass
 plexonutility.admin
 plexonutility.reload
 ```
-
-## Release boundary
-
-`v1.0.0` is the existing rollback baseline. `v1.0.1-rc.1` is a prerelease candidate only; stable `v1.0.1` must remain unpublished until PlexonCraft batch runtime certification succeeds.
-
-The RC release must contain:
-
-- `PlexonUtility-1.0.1-rc.1.jar`
-- `SHA256SUMS.txt`
-- `TEST_SUMMARY.txt`
-- `PROVENANCE.txt`
-
-## Essentials migration safety
-
-PlexonUtility replacing these four utility commands does **not** prove Essentials can be uninstalled. Before full removal, audit the live server command map, active Vault economy provider/balance storage, Essentials-dependent plugins, kits/mail/nickname data, and PlexonHomes/PlexonTravel PRIMARY state. See `docs/ESSENTIALS_FEATURE_AUDIT.md` and `docs/ESSENTIALS_DECOMMISSION_CHECKLIST.md`.

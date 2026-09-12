@@ -1,5 +1,6 @@
 package com.zpkdxgames.plexonutility.afk;
 
+import com.zpkdxgames.plexoncore.scheduler.CoreScheduler;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.feature.Feature;
 import com.zpkdxgames.plexonutility.message.MessageService;
@@ -35,12 +36,15 @@ public final class AfkManager implements Listener, AutoCloseable {
     private final AfkTracker tracker;
     private final AfkNotifier notifier;
     private final SharedScheduler scheduler;
+    private final CoreScheduler coreScheduler;
 
-    public AfkManager(JavaPlugin plugin, Supplier<UtilityConfig> config, MessageService messages, AfkTracker tracker) {
+    public AfkManager(JavaPlugin plugin, Supplier<UtilityConfig> config, MessageService messages,
+                      AfkTracker tracker, CoreScheduler coreScheduler) {
         this.plugin = plugin;
         this.config = config;
         this.tracker = tracker;
         this.notifier = new AfkNotifier(config, messages);
+        this.coreScheduler = coreScheduler;
         this.scheduler = new SharedScheduler((periodTicks, task) -> {
             var handle = plugin.getServer().getScheduler().runTaskTimer(plugin, task, periodTicks, periodTicks);
             return handle::cancel;
@@ -118,7 +122,7 @@ public final class AfkManager implements Listener, AutoCloseable {
         if (!config.get().enabled(Feature.AFK)) return;
         AfkTracker.Transition transition = tracker.activity(player.getUniqueId());
         if (transition != AfkTracker.Transition.NONE) {
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            coreScheduler.runPrimary(() -> {
                 if (plugin.isEnabled()) notifier.notify(player, transition, false);
             });
         }

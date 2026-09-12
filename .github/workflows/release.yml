@@ -117,11 +117,16 @@ jobs:
             'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' \
             'com/zpkdxgames/plexonutility/afk/AfkManager.class' \
             'com/zpkdxgames/plexonutility/afk/AfkTracker.class' \
+            'com/zpkdxgames/plexonutility/integration/ComplementService.class' \
+            'com/zpkdxgames/plexonutility/menu/UtilityMenuService.class' \
+            'com/zpkdxgames/plexonutility/trash/TrashService.class' \
             'com/zpkdxgames/plexonutility/placeholder/UtilityPlaceholderExpansion.class'; do
             grep -qx "$class" target/jar-contents.txt
           done
           unzip -p "$JAR" plugin.yml | grep -F "version: '${VERSION}'"
           unzip -p "$JAR" plugin.yml | grep -F "api-version: '26.2'"
+          unzip -p "$JAR" plugin.yml | grep -F '  utility:'
+          unzip -p "$JAR" plugin.yml | grep -F '  trash:'
           unzip -p "$JAR" plugin.yml | grep -F '  afk:'
           unzip -p "$JAR" META-INF/MANIFEST.MF | tr -d '\r' | grep -F "Implementation-Version: ${VERSION}"
           javap -verbose -classpath "$JAR" com.zpkdxgames.plexonutility.PlexonUtilityPlugin | grep -F 'major version: 69'
@@ -154,6 +159,7 @@ jobs:
           class_major=69
           paper_api=26.2.build.121-stable
           plexoncore_compile_boundary=2.0.0
+          core_services=text,gui,scheduler,integrations
           source_closure=VERIFIED
           runtime_deployment=FOLLOW_UP_NON_BLOCKING
           EOF
