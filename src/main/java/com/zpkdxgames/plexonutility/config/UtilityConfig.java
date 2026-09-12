@@ -20,7 +20,11 @@ public record UtilityConfig(
         boolean healClearNegativeEffects,
         Set<String> healNegativeEffects,
         long healCooldownNanos,
-        AfkConfig afk) {
+        AfkConfig afk,
+        FeedbackConfig feedback) {
+
+    private static final Set<String> BOSSBAR_COLORS = Set.of("PINK", "BLUE", "RED", "GREEN", "YELLOW", "PURPLE", "WHITE");
+    private static final Set<String> BOSSBAR_OVERLAYS = Set.of("PROGRESS", "NOTCHED_6", "NOTCHED_10", "NOTCHED_12", "NOTCHED_20");
 
     public record AfkConfig(
             boolean autoTimeoutEnabled,
@@ -60,6 +64,32 @@ public record UtilityConfig(
         }
     }
 
+    /**
+     * Presentation policy for routine player feedback. Chat remains available for errors/admin output,
+     * while successful self-actions and persistent states use HUD surfaces by default.
+     */
+    public record FeedbackConfig(
+            boolean utilitySuccessActionbar,
+            boolean socialEventPrefix,
+            boolean afkBossbarEnabled,
+            String afkBossbarColor,
+            String afkBossbarOverlay,
+            boolean afkReturnActionbarEnabled,
+            long afkSuppressShortReturnNanos) {
+
+        public FeedbackConfig {
+            afkBossbarColor = normalizeEnum("feedback.afk.bossbar.color", afkBossbarColor, BOSSBAR_COLORS);
+            afkBossbarOverlay = normalizeEnum("feedback.afk.bossbar.overlay", afkBossbarOverlay, BOSSBAR_OVERLAYS);
+            if (afkSuppressShortReturnNanos < 0L) {
+                throw new IllegalArgumentException("feedback.afk.suppress-short-return-seconds must not be negative");
+            }
+        }
+
+        public static FeedbackConfig defaults() {
+            return new FeedbackConfig(true, false, true, "YELLOW", "PROGRESS", true, secondsToNanos(8L));
+        }
+    }
+
     public UtilityConfig {
         EnumSet<Feature> featureCopy = enabledFeatures.isEmpty()
                 ? EnumSet.noneOf(Feature.class)
@@ -67,9 +97,10 @@ public record UtilityConfig(
         enabledFeatures = Collections.unmodifiableSet(featureCopy);
         healNegativeEffects = Collections.unmodifiableSet(new LinkedHashSet<>(healNegativeEffects));
         if (afk == null) afk = AfkConfig.defaults();
+        if (feedback == null) feedback = FeedbackConfig.defaults();
     }
 
-    /** Compatibility constructor retained for existing tests/integrations created before AFK settings existed. */
+    /** Compatibility constructor retained for existing tests/integrations created before feedback settings existed. */
     public UtilityConfig(
             Set<Feature> enabledFeatures,
             int feedFoodLevel,
@@ -90,7 +121,8 @@ public record UtilityConfig(
                 healClearNegativeEffects,
                 healNegativeEffects,
                 healCooldownNanos,
-                AfkConfig.defaults());
+                AfkConfig.defaults(),
+                FeedbackConfig.defaults());
     }
 
     public static UtilityConfig from(FileConfiguration config) {
@@ -126,6 +158,15 @@ public record UtilityConfig(
                 readString(config, "afk.placeholder.active", "", 128),
                 readString(config, "afk.placeholder.afk", " <gray>[AFK]</gray>", 128));
 
+        FeedbackConfig feedback = new FeedbackConfig(
+                readBoolean(config, "feedback.utility-success-actionbar", true),
+                readBoolean(config, "feedback.social-events.prefix", false),
+                readBoolean(config, "feedback.afk.bossbar.enabled", true),
+                readEnum(config, "feedback.afk.bossbar.color", "YELLOW", BOSSBAR_COLORS),
+                readEnum(config, "feedback.afk.bossbar.overlay", "PROGRESS", BOSSBAR_OVERLAYS),
+                readBoolean(config, "feedback.afk.return-actionbar.enabled", true),
+                secondsToNanos(readLong(config, "feedback.afk.suppress-short-return-seconds", 8L, 0L, 300L)));
+
         return new UtilityConfig(
                 enabled,
                 foodLevel,
@@ -136,7 +177,8 @@ public record UtilityConfig(
                 clearNegative,
                 effects,
                 healCooldown,
-                afk);
+                afk,
+                feedback);
     }
 
     public boolean enabled(Feature feature) {
@@ -206,6 +248,20 @@ public record UtilityConfig(
             throw invalid(path, "must be a single-line string up to " + maxLength + " characters");
         }
         return value;
+    }
+
+    private static String readEnum(FileConfiguration config, String path, String fallback, Set<String> allowed) {
+        Object raw = config.get(path);
+        if (raw == null) return fallback;
+        if (!(raw instanceof String value)) throw invalid(path, "must be a string");
+        return normalizeEnum(path, value, allowed);
+    }
+
+    private static String normalizeEnum(String path, String value, Set<String> allowed) {
+        if (value == null) throw invalid(path, "must not be null");
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        if (!allowed.contains(normalized)) throw invalid(path, "must be one of " + allowed);
+        return normalized;
     }
 
     private static String validatePlaceholder(String path, String value) {
