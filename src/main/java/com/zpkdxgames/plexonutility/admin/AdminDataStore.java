@@ -84,12 +84,15 @@ public final class AdminDataStore implements AutoCloseable {
     }
 
     public synchronized void setPrison(PrisonLocation prison) {
-        Snapshot next = new Snapshot(Objects.requireNonNull(prison, "prison"), snapshot.vanished());
+        PrisonLocation nextPrison = Objects.requireNonNull(prison, "prison");
+        if (nextPrison.equals(snapshot.prison())) return;
+        Snapshot next = new Snapshot(nextPrison, snapshot.vanished());
         snapshot = next;
         scheduleWrite(next);
     }
 
     public synchronized void clearPrison() {
+        if (snapshot.prison() == null) return;
         Snapshot next = new Snapshot(null, snapshot.vanished());
         snapshot = next;
         scheduleWrite(next);
