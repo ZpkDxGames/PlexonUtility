@@ -7,6 +7,7 @@ import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.cooldown.CooldownService;
 import com.zpkdxgames.plexonutility.feature.Feature;
 import com.zpkdxgames.plexonutility.integration.ComplementService;
+import com.zpkdxgames.plexonutility.integration.FamilyCompatibilityService;
 import com.zpkdxgames.plexonutility.message.MessageService;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -21,14 +22,16 @@ public final class UtilityAdminCommand implements CommandExecutor {
     private final MessageService messages;
     private final AfkManager afk;
     private final ComplementService complements;
+    private final FamilyCompatibilityService family;
 
     public UtilityAdminCommand(PlexonUtilityPlugin plugin, CooldownService cooldowns, MessageService messages,
-                               AfkManager afk, ComplementService complements) {
+                               AfkManager afk, ComplementService complements, FamilyCompatibilityService family) {
         this.plugin = plugin;
         this.cooldowns = cooldowns;
         this.messages = messages;
         this.afk = afk;
         this.complements = complements;
+        this.family = family;
     }
 
     @Override
@@ -42,6 +45,10 @@ public final class UtilityAdminCommand implements CommandExecutor {
             integrations(sender);
             return true;
         }
+        if (args[0].equalsIgnoreCase("family")) {
+            family(sender);
+            return true;
+        }
         if (args[0].equalsIgnoreCase("reload")) {
             if (!sender.hasPermission("plexonutility.reload")) {
                 messages.send(sender, "no-permission");
@@ -49,7 +56,6 @@ public final class UtilityAdminCommand implements CommandExecutor {
             }
             try {
                 plugin.reloadUtilityState();
-                complements.refresh();
                 messages.send(sender, "reloaded");
             } catch (RuntimeException exception) {
                 String reason = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
@@ -63,7 +69,7 @@ public final class UtilityAdminCommand implements CommandExecutor {
     private void diagnostics(CommandSender sender) {
         UtilityConfig cfg = plugin.utilityConfig();
         PlexonCoreAPI core = plugin.core();
-        messages.sendRaw(sender, "<gradient:#57E389:#22D3EE><bold>2.0 Diagnostics</bold></gradient>");
+        messages.sendRaw(sender, "<gradient:#57E389:#22D3EE><bold>3.0 Diagnostics</bold></gradient>");
         messages.sendRaw(sender, "<gray>Plugin:</gray> <white><version></white>", Map.of("version", plugin.getPluginMeta().getVersion()));
         messages.sendRaw(sender, "<gray>Core:</gray> <white><core></white>", Map.of("core", core == null ? "UNAVAILABLE" : core.version().pluginVersion() + " / API " + core.version().apiVersion()));
         messages.sendRaw(sender, "<gray>Module:</gray> <white><state></white>", Map.of("state", core == null ? "UNAVAILABLE" : core.modules().find("utility").map(view -> view.state().name()).orElse("MISSING")));
@@ -78,6 +84,8 @@ public final class UtilityAdminCommand implements CommandExecutor {
         messages.sendRaw(sender, "<gray>AFK auto-timeout:</gray> <white><value></white>", Map.of("value", cfg.afk().autoTimeoutEnabled() ? (cfg.afk().timeoutNanos() / 1_000_000_000L) + "s" : "DISABLED"));
         messages.sendRaw(sender, "<gray>AFK state persistence:</gray> <white>EPHEMERAL</white>");
         messages.sendRaw(sender, "<gray>PlaceholderAPI:</gray> <white><state></white>", Map.of("state", plugin.placeholderRegistered() ? "REGISTERED" : "UNAVAILABLE"));
+        messages.sendRaw(sender, "<gray>PlexonFamily integrations:</gray> <white><ready>/<total></white>", Map.of("ready", family.readyCount(), "total", family.totalCount()));
+        messages.sendRaw(sender, "<gray>PlexonHomes:</gray> <white><state></white>", Map.of("state", family.ready("PLEXON_HOMES") ? "READY" : "MISSING"));
         if (core != null) {
             var snapshot = core.diagnostics();
             messages.sendRaw(sender, "<gray>Core health:</gray> <white><health></white>", Map.of("health", snapshot.health()));
@@ -95,5 +103,17 @@ public final class UtilityAdminCommand implements CommandExecutor {
                     "category", status.category().label(),
                     "providers", status.providerSummary()));
         }
+    }
+
+    private void family(CommandSender sender) {
+        var statuses = family.refresh();
+        messages.sendRaw(sender, "<gradient:#57E389:#22D3EE><bold>PlexonFamily Compatibility</bold></gradient>");
+        for (var status : statuses) {
+            String state = status.ready() ? "<green>READY</green>" : "<dark_gray>NOT ACTIVE</dark_gray>";
+            messages.sendRaw(sender, "<gray><plugin>:</gray> " + state + " <dark_gray>•</dark_gray> <white><version></white>", Map.of(
+                    "plugin", status.pluginName(),
+                    "version", status.version()));
+        }
+        messages.sendRaw(sender, "<gray>Homes limit contract:</gray> <white>plexonhomes.limit.&lt;N&gt;</white> <dark_gray>or</dark_gray> <white>plexonhomes.limit.unlimited</white>");
     }
 }

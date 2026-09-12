@@ -1,6 +1,7 @@
 package com.zpkdxgames.plexonutility.afk;
 
 import com.zpkdxgames.plexoncore.scheduler.CoreScheduler;
+import com.zpkdxgames.plexonutility.api.event.AfkStateChangeEvent;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.feature.Feature;
 import com.zpkdxgames.plexonutility.message.MessageService;
@@ -24,6 +25,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Locale;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
@@ -75,11 +77,11 @@ public final class AfkManager implements Listener, AutoCloseable {
 
     public boolean toggle(Player player) {
         AfkTracker.Transition transition = tracker.toggle(player.getUniqueId());
-        notifier.notify(player, transition, true);
+        notifyTransition(player, transition, true, AfkStateChangeEvent.Reason.MANUAL);
         return tracker.isAfk(player.getUniqueId());
     }
 
-    public boolean isAfk(java.util.UUID playerId) {
+    public boolean isAfk(UUID playerId) {
         return tracker.isAfk(playerId);
     }
 
@@ -108,14 +110,18 @@ public final class AfkManager implements Listener, AutoCloseable {
                     player.getUniqueId(),
                     timeoutNanos,
                     player.hasPermission("plexonutility.afk.auto.bypass"));
-            if (transition != AfkTracker.Transition.NONE) notifier.notify(player, transition, false);
+            if (transition != AfkTracker.Transition.NONE) {
+                notifyTransition(player, transition, false, AfkStateChangeEvent.Reason.TIMEOUT);
+            }
         }
     }
 
     private void activity(Player player) {
         if (!config.get().enabled(Feature.AFK)) return;
         AfkTracker.Transition transition = tracker.activity(player.getUniqueId());
-        if (transition != AfkTracker.Transition.NONE) notifier.notify(player, transition, false);
+        if (transition != AfkTracker.Transition.NONE) {
+            notifyTransition(player, transition, false, AfkStateChangeEvent.Reason.ACTIVITY);
+        }
     }
 
     private void asyncActivity(Player player) {
@@ -123,9 +129,19 @@ public final class AfkManager implements Listener, AutoCloseable {
         AfkTracker.Transition transition = tracker.activity(player.getUniqueId());
         if (transition != AfkTracker.Transition.NONE) {
             coreScheduler.runPrimary(() -> {
-                if (plugin.isEnabled()) notifier.notify(player, transition, false);
+                if (plugin.isEnabled()) {
+                    notifyTransition(player, transition, false, AfkStateChangeEvent.Reason.ACTIVITY);
+                }
             });
         }
+    }
+
+    private void notifyTransition(Player player, AfkTracker.Transition transition, boolean directFeedback,
+                                  AfkStateChangeEvent.Reason reason) {
+        if (transition == AfkTracker.Transition.NONE) return;
+        boolean afk = transition == AfkTracker.Transition.TO_AFK;
+        plugin.getServer().getPluginManager().callEvent(new AfkStateChangeEvent(player, afk, reason));
+        notifier.notify(player, transition, directFeedback);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

@@ -12,6 +12,7 @@ import com.zpkdxgames.plexonutility.cooldown.CooldownService;
 import com.zpkdxgames.plexonutility.feature.Feature;
 import com.zpkdxgames.plexonutility.integration.ComplementService;
 import com.zpkdxgames.plexonutility.integration.CoreBridge;
+import com.zpkdxgames.plexonutility.integration.FamilyCompatibilityService;
 import com.zpkdxgames.plexonutility.menu.UtilityMenuService;
 import com.zpkdxgames.plexonutility.message.MessageService;
 import com.zpkdxgames.plexonutility.placeholder.UtilityPlaceholderExpansion;
@@ -36,6 +37,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
     private MessageService messages;
     private CoreBridge coreBridge;
     private ComplementService complements;
+    private FamilyCompatibilityService family;
     private AfkTracker afkTracker;
     private AfkManager afkManager;
     private UtilityPlaceholderExpansion placeholderExpansion;
@@ -54,8 +56,11 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             coreBridge = new CoreBridge(this);
             PlexonCoreAPI core = coreBridge.connect(utilityConfig.enabledFeatures());
             messages = new MessageService(this, core.text());
+
             complements = new ComplementService(getServer().getPluginManager(), core.integrations());
             complements.refresh();
+            family = new FamilyCompatibilityService(this, core.integrations());
+            family.refresh();
 
             afkTracker = new AfkTracker();
             afkManager = new AfkManager(this, this::utilityConfig, messages, afkTracker, core.scheduler());
@@ -66,20 +71,25 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             Objects.requireNonNull(getCommand("enderchest")).setExecutor(utilityCommand);
             Objects.requireNonNull(getCommand("workbench")).setExecutor(utilityCommand);
             Objects.requireNonNull(getCommand("afk")).setExecutor(new AfkCommand(this::utilityConfig, afkManager, messages));
-            Objects.requireNonNull(getCommand("utility")).setExecutor(new UtilityMenuService(this::utilityConfig, messages, core.gui(), core.text()));
+            Objects.requireNonNull(getCommand("utility")).setExecutor(
+                    new UtilityMenuService(this::utilityConfig, messages, core.gui(), core.text(), afkManager, family));
             Objects.requireNonNull(getCommand("trash")).setExecutor(new TrashService(this::utilityConfig, messages, core.text()));
-            Objects.requireNonNull(getCommand("utilityadmin")).setExecutor(new UtilityAdminCommand(this, cooldowns, messages, afkManager, complements));
+            Objects.requireNonNull(getCommand("utilityadmin")).setExecutor(
+                    new UtilityAdminCommand(this, cooldowns, messages, afkManager, complements, family));
 
             getServer().getPluginManager().registerEvents(this, this);
             getServer().getPluginManager().registerEvents(afkManager, this);
+            getServer().getPluginManager().registerEvents(family, this);
             afkManager.start();
             registerPlaceholderExpansion();
 
             api = new DefaultUtilityAPI();
             getServer().getServicesManager().register(PlexonUtilityAPI.class, api, this, ServicePriority.Normal);
-            coreBridge.ready("Core text/gui/scheduler shared; enabled features: " + utilityConfig.enabledFeatures());
+            coreBridge.ready("Core text/gui/scheduler/integrations shared; family-ready="
+                    + family.readyCount() + "/" + family.totalCount() + "; enabled features: " + utilityConfig.enabledFeatures());
             getLogger().info("PlexonUtility " + getPluginMeta().getVersion() + " enabled with " + utilityConfig.enabledFeatures()
-                    + "; Core-native text/gui/scheduler; AFK scheduler=" + afkManager.schedulerCount()
+                    + "; Core-native text/gui/scheduler/integrations; family-ready=" + family.readyCount() + "/" + family.totalCount()
+                    + "; AFK scheduler=" + afkManager.schedulerCount()
                     + "; PlaceholderAPI=" + (placeholderExpansion != null));
         } catch (RuntimeException exception) {
             getLogger().severe("PlexonUtility failed to initialize: " + detail(exception));
@@ -113,9 +123,13 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         messages.apply(candidateMessages);
         utilityConfig = candidateConfig;
         if (afkManager != null) afkManager.reload();
+        if (complements != null) complements.refresh();
+        if (family != null) family.refresh();
 
         if (coreBridge != null && coreBridge.core() != null) {
-            coreBridge.ready("Reloaded; Core text/gui/scheduler shared; enabled features: " + candidateConfig.enabledFeatures());
+            coreBridge.ready("Reloaded; Core shared services active; family-ready="
+                    + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
+                    + "; enabled features: " + candidateConfig.enabledFeatures());
         }
     }
 

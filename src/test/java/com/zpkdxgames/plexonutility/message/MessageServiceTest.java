@@ -15,14 +15,26 @@ class MessageServiceTest {
     }
 
     @Test
-    void existingCatalogCanInheritNewKeysFromBundledDefaults() {
+    void existingCatalogCopiesNewKeysFromBundledDefaults() {
         YamlConfiguration existing = completeCatalog("existing");
         existing.set("heal-unavailable", null);
         YamlConfiguration defaults = completeCatalog("default");
 
-        assertDoesNotThrow(() -> MessageService.applyDefaultsAndValidate(existing, defaults));
+        int migrated = MessageService.applyDefaultsAndValidate(existing, defaults);
+
+        assertEquals(1, migrated);
         assertEquals("default", existing.getString("heal-unavailable"));
         assertEquals("existing", existing.getString("heal-self"));
+        assertEquals("default", existing.getValues(false).get("heal-unavailable"));
+    }
+
+    @Test
+    void completeCatalogDoesNotReportMigration() {
+        YamlConfiguration existing = completeCatalog("existing");
+        YamlConfiguration defaults = completeCatalog("default");
+
+        assertEquals(0, MessageService.applyDefaultsAndValidate(existing, defaults));
+        assertEquals("existing", existing.getString("afk-self-on"));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.zpkdxgames.plexonutility.message;
 
 import com.zpkdxgames.plexoncore.text.TextService;
+import com.zpkdxgames.plexoncore.text.TextService.TextMode;
 import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -15,6 +16,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class MessageService {
     static final List<String> REQUIRED_KEYS = List.of(
@@ -41,6 +43,7 @@ public final class MessageService {
     private final JavaPlugin plugin;
     private final TextService text;
     private final YamlConfiguration defaults;
+    private final Map<String, Component> staticRenderCache = new ConcurrentHashMap<>();
     private volatile YamlConfiguration messages;
 
     public MessageService(JavaPlugin plugin, TextService text) {
@@ -59,8 +62,10 @@ public final class MessageService {
         } catch (IOException | InvalidConfigurationException exception) {
             throw new IllegalArgumentException("messages.yml could not be loaded: " + exception.getMessage(), exception);
         }
-        applyDefaultsAndValidate(candidate, defaults);
+
+        int migrated = applyDefaultsAndValidate(candidate, defaults);
         validateFormatting(candidate);
+        if (migrated > 0) persistMigratedCatalog(file, candidate, migrated);
         return candidate;
     }
 
@@ -68,6 +73,7 @@ public final class MessageService {
         applyDefaultsAndValidate(candidate, defaults);
         validateFormatting(candidate);
         messages = candidate;
+        staticRenderCache.clear();
     }
 
     public void reload() {
@@ -98,12 +104,27 @@ public final class MessageService {
     public Component render(String key, Map<String, String> replacements) {
         YamlConfiguration catalog = messages;
         String template = catalog.getString(key, "<red>Missing message: " + key + "</red>");
-        return text.renderTemplate(prefix(catalog) + template, replacements);
+        String complete = prefix(catalog) + template;
+        if (replacements == null || replacements.isEmpty()) {
+            return staticRenderCache.computeIfAbsent(key, ignored -> text.render(TextMode.MINIMESSAGE, complete));
+        }
+        return text.renderTemplate(complete, replacements);
     }
 
-    static void applyDefaultsAndValidate(YamlConfiguration candidate, YamlConfiguration defaults) {
+    static int applyDefaultsAndValidate(YamlConfiguration candidate, YamlConfiguration defaults) {
+        int migrated = 0;
+        for (String key : REQUIRED_KEYS) {
+            if (!candidate.isSet(key)) {
+                Object bundled = defaults.get(key);
+                if (bundled != null) {
+                    candidate.set(key, bundled);
+                    migrated++;
+                }
+            }
+        }
         candidate.setDefaults(defaults);
         validateCatalog(candidate);
+        return migrated;
     }
 
     static void validateCatalog(YamlConfiguration candidate) {
@@ -126,6 +147,15 @@ public final class MessageService {
             if (!result.valid()) {
                 throw new IllegalArgumentException("messages.yml key '" + key + "' has invalid MiniMessage: " + result.reason());
             }
+        }
+    }
+
+    private void persistMigratedCatalog(File file, YamlConfiguration candidate, int migrated) {
+        try {
+            candidate.save(file);
+            plugin.getLogger().info("Migrated " + migrated + " missing messages.yml key(s) from bundled defaults.");
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("messages.yml migration could not be saved: " + exception.getMessage(), exception);
         }
     }
 
