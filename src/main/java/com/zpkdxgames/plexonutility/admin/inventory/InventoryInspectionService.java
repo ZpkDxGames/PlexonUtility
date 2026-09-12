@@ -329,7 +329,9 @@ public final class InventoryInspectionService implements Listener {
     }
 
     private static boolean empty(ItemStack item) {
-        return item == null || item.getAmount() <= 0 || item.getType().isAir();
+        if (item == null || item.getAmount() <= 0) return true;
+        Material type = item.getType();
+        return type == Material.AIR || type == Material.CAVE_AIR || type == Material.VOID_AIR;
     }
 
     private static ItemStack copyWithAmount(ItemStack item, int amount) {
