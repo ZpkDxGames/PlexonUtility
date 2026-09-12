@@ -2,6 +2,7 @@ package com.zpkdxgames.plexonutility.command;
 
 import com.zpkdxgames.plexoncore.api.PlexonCoreAPI;
 import com.zpkdxgames.plexonutility.PlexonUtilityPlugin;
+import com.zpkdxgames.plexonutility.admin.gui.AdminMenuService;
 import com.zpkdxgames.plexonutility.afk.AfkManager;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.cooldown.CooldownService;
@@ -12,6 +13,7 @@ import com.zpkdxgames.plexonutility.message.MessageService;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
@@ -23,29 +25,51 @@ public final class UtilityAdminCommand implements CommandExecutor {
     private final AfkManager afk;
     private final ComplementService complements;
     private final FamilyCompatibilityService family;
+    private final AdminMenuService adminMenu;
 
     public UtilityAdminCommand(PlexonUtilityPlugin plugin, CooldownService cooldowns, MessageService messages,
-                               AfkManager afk, ComplementService complements, FamilyCompatibilityService family) {
+                               AfkManager afk, ComplementService complements, FamilyCompatibilityService family,
+                               AdminMenuService adminMenu) {
         this.plugin = plugin;
         this.cooldowns = cooldowns;
         this.messages = messages;
         this.afk = afk;
         this.complements = complements;
         this.family = family;
+        this.adminMenu = adminMenu;
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
-        if (args.length == 0 || args[0].equalsIgnoreCase("diagnostics")) {
-            diagnostics(sender);
+        if (args.length == 0) {
+            if (sender instanceof Player player) {
+                if (!plugin.utilityConfig().admin().enabled()) {
+                    messages.send(player, "admin-feature-disabled");
+                    return true;
+                }
+                if (!player.hasPermission("plexonutility.admin.menu")) {
+                    messages.send(player, "no-permission");
+                    return true;
+                }
+                adminMenu.open(player);
+            } else {
+                diagnostics(sender);
+            }
             return true;
         }
         if (args.length > 1) return false;
+        if (args[0].equalsIgnoreCase("diagnostics")) {
+            if (!adminPermission(sender)) return true;
+            diagnostics(sender);
+            return true;
+        }
         if (args[0].equalsIgnoreCase("integrations")) {
+            if (!adminPermission(sender)) return true;
             integrations(sender);
             return true;
         }
         if (args[0].equalsIgnoreCase("family")) {
+            if (!adminPermission(sender)) return true;
             family(sender);
             return true;
         }
@@ -66,6 +90,12 @@ public final class UtilityAdminCommand implements CommandExecutor {
         return false;
     }
 
+    private boolean adminPermission(CommandSender sender) {
+        if (!(sender instanceof Player) || sender.hasPermission("plexonutility.admin.menu")) return true;
+        messages.send(sender, "no-permission");
+        return false;
+    }
+
     private void diagnostics(CommandSender sender) {
         UtilityConfig cfg = plugin.utilityConfig();
         PlexonCoreAPI core = plugin.core();
@@ -75,20 +105,19 @@ public final class UtilityAdminCommand implements CommandExecutor {
         messages.sendRaw(sender, "<gray>Module:</gray> <white><state></white>", Map.of("state", core == null ? "UNAVAILABLE" : core.modules().find("utility").map(view -> view.state().name()).orElse("MISSING")));
         for (Feature feature : Feature.values()) {
             messages.sendRaw(sender, "<dark_gray>•</dark_gray> <gray><feature>:</gray> <state>", Map.of(
-                    "feature", feature.id(),
-                    "state", cfg.enabled(feature) ? "ENABLED" : "DISABLED"));
+                    "feature", feature.id(), "state", cfg.enabled(feature) ? "ENABLED" : "DISABLED"));
         }
+        messages.sendRaw(sender, "<gray>Admin toolkit:</gray> <white><state></white>", Map.of("state", cfg.admin().enabled() ? "ENABLED" : "DISABLED"));
+        messages.sendRaw(sender, "<gray>Native vanish:</gray> <white><state></white> <dark_gray>•</dark_gray> <gray>persist:</gray> <white><persist></white>", Map.of(
+                "state", cfg.admin().vanish().enabled() ? "ENABLED" : "DISABLED", "persist", cfg.admin().vanish().persist()));
+        messages.sendRaw(sender, "<gray>Prison waypoint:</gray> <white><state></white>", Map.of("state", cfg.admin().prisonEnabled() ? "ENABLED" : "DISABLED"));
         messages.sendRaw(sender, "<gray>Cooldown players:</gray> <white><count></white>", Map.of("count", cooldowns.trackedPlayers()));
         messages.sendRaw(sender, "<gray>AFK tracked/afk:</gray> <white><tracked>/<afk></white>", Map.of("tracked", afk.trackedPlayers(), "afk", afk.afkPlayers()));
         messages.sendRaw(sender, "<gray>AFK shared schedulers:</gray> <white><count></white>", Map.of("count", afk.schedulerCount()));
         messages.sendRaw(sender, "<gray>AFK auto-timeout:</gray> <white><value></white>", Map.of("value", cfg.afk().autoTimeoutEnabled() ? (cfg.afk().timeoutNanos() / 1_000_000_000L) + "s" : "DISABLED"));
         messages.sendRaw(sender, "<gray>AFK bossbar:</gray> <white><state></white> <dark_gray>•</dark_gray> <white><color>/<overlay></white>", Map.of(
-                "state", cfg.feedback().afkBossbarEnabled() ? "ENABLED" : "DISABLED",
-                "color", cfg.feedback().afkBossbarColor(),
-                "overlay", cfg.feedback().afkBossbarOverlay()));
+                "state", cfg.feedback().afkBossbarEnabled() ? "ENABLED" : "DISABLED", "color", cfg.feedback().afkBossbarColor(), "overlay", cfg.feedback().afkBossbarOverlay()));
         messages.sendRaw(sender, "<gray>Quiet self success:</gray> <white><state></white>", Map.of("state", cfg.feedback().utilitySuccessActionbar() ? "ACTIONBAR" : "CHAT"));
-        messages.sendRaw(sender, "<gray>Social event prefix:</gray> <white><state></white>", Map.of("state", cfg.feedback().socialEventPrefix() ? "ENABLED" : "DISABLED"));
-        messages.sendRaw(sender, "<gray>AFK short-return suppression:</gray> <white><seconds>s</white>", Map.of("seconds", cfg.feedback().afkSuppressShortReturnNanos() / 1_000_000_000L));
         messages.sendRaw(sender, "<gray>AFK state persistence:</gray> <white>EPHEMERAL</white>");
         messages.sendRaw(sender, "<gray>PlaceholderAPI:</gray> <white><state></white>", Map.of("state", plugin.placeholderRegistered() ? "REGISTERED" : "UNAVAILABLE"));
         messages.sendRaw(sender, "<gray>PlexonFamily integrations:</gray> <white><ready>/<total></white>", Map.of("ready", family.readyCount(), "total", family.totalCount()));
@@ -107,8 +136,7 @@ public final class UtilityAdminCommand implements CommandExecutor {
         for (var status : statuses) {
             String state = status.detectedAny() ? "<green>READY</green>" : "<yellow>NOT DETECTED</yellow>";
             messages.sendRaw(sender, "<gray><category>:</gray> " + state + " <dark_gray>•</dark_gray> <white><providers></white>", Map.of(
-                    "category", status.category().label(),
-                    "providers", status.providerSummary()));
+                    "category", status.category().label(), "providers", status.providerSummary()));
         }
     }
 
@@ -118,11 +146,9 @@ public final class UtilityAdminCommand implements CommandExecutor {
         for (var status : statuses) {
             String state = status.ready() ? "<green>READY</green>" : "<dark_gray>NOT ACTIVE</dark_gray>";
             messages.sendRaw(sender, "<gray><plugin>:</gray> " + state + " <dark_gray>•</dark_gray> <white><version></white>", Map.of(
-                    "plugin", status.pluginName(),
-                    "version", status.version()));
+                    "plugin", status.pluginName(), "version", status.version()));
         }
-        messages.sendRaw(sender,
-                "<gray>Homes limit contract:</gray> <white><numeric></white> <dark_gray>or</dark_gray> <white><unlimited></white>",
+        messages.sendRaw(sender, "<gray>Homes limit contract:</gray> <white><numeric></white> <dark_gray>or</dark_gray> <white><unlimited></white>",
                 Map.of("numeric", "plexonhomes.limit.<N>", "unlimited", "plexonhomes.limit.unlimited"));
     }
 }

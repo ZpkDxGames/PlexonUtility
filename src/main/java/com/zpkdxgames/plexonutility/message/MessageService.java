@@ -40,7 +40,30 @@ public final class MessageService {
             "afk-announcement-on",
             "afk-announcement-off",
             "reloaded",
-            "reload-failed");
+            "reload-failed",
+            "admin-feature-disabled",
+            "admin-target-offline",
+            "admin-player-unknown",
+            "admin-self-action-denied",
+            "admin-invalid-duration",
+            "admin-invalid-reason",
+            "admin-vanish-on",
+            "admin-vanish-off",
+            "admin-kick-screen",
+            "admin-kick-success",
+            "admin-ban-success",
+            "admin-not-banned",
+            "admin-unban-success",
+            "admin-prison-not-configured",
+            "admin-prison-set",
+            "admin-prison-goto",
+            "admin-prison-sent",
+            "admin-prison-cleared",
+            "admin-prison-world-missing",
+            "admin-prison-teleport-failed");
+
+    private static final List<String> TEMPLATE_TAGS = List.of(
+            "player", "seconds", "reason", "duration", "world", "coordinates", "uuid", "actor", "source", "expiry");
 
     private final JavaPlugin plugin;
     private final TextService text;
@@ -109,7 +132,6 @@ public final class MessageService {
         return renderInternal(key, replacements, true);
     }
 
-    /** Render a configured message without the plugin identity prefix, for HUD/social surfaces. */
     public Component renderUnprefixed(String key, Map<String, String> replacements) {
         return renderInternal(key, replacements, false);
     }
@@ -153,10 +175,8 @@ public final class MessageService {
     private void validateFormatting(YamlConfiguration candidate) {
         for (String key : REQUIRED_KEYS) {
             String value = candidate.getString(key, "");
-            String validationTemplate = value
-                    .replace("<player>", "player")
-                    .replace("<seconds>", "seconds")
-                    .replace("<reason>", "reason");
+            String validationTemplate = value;
+            for (String tag : TEMPLATE_TAGS) validationTemplate = validationTemplate.replace("<" + tag + ">", "value");
             var result = text.validateMiniMessage(validationTemplate);
             if (!result.valid()) {
                 throw new IllegalArgumentException("messages.yml key '" + key + "' has invalid MiniMessage: " + result.reason());

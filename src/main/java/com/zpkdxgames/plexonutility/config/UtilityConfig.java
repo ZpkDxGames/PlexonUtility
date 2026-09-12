@@ -21,7 +21,8 @@ public record UtilityConfig(
         Set<String> healNegativeEffects,
         long healCooldownNanos,
         AfkConfig afk,
-        FeedbackConfig feedback) {
+        FeedbackConfig feedback,
+        AdminConfig admin) {
 
     private static final Set<String> BOSSBAR_COLORS = Set.of("PINK", "BLUE", "RED", "GREEN", "YELLOW", "PURPLE", "WHITE");
     private static final Set<String> BOSSBAR_OVERLAYS = Set.of("PROGRESS", "NOTCHED_6", "NOTCHED_10", "NOTCHED_12", "NOTCHED_20");
@@ -64,10 +65,7 @@ public record UtilityConfig(
         }
     }
 
-    /**
-     * Presentation policy for routine player feedback. Chat remains available for errors/admin output,
-     * while successful self-actions and persistent states use HUD surfaces by default.
-     */
+    /** Presentation policy for routine player feedback. */
     public record FeedbackConfig(
             boolean utilitySuccessActionbar,
             boolean socialEventPrefix,
@@ -90,6 +88,49 @@ public record UtilityConfig(
         }
     }
 
+    public record VanishConfig(boolean enabled, boolean persist, boolean suppressJoinQuit) {
+        public static VanishConfig defaults() {
+            return new VanishConfig(true, true, true);
+        }
+    }
+
+    public record ModerationConfig(
+            boolean kickEnabled,
+            String kickDefaultReason,
+            boolean banEnabled,
+            String banDefaultReason,
+            int maxDurationDays) {
+
+        public ModerationConfig {
+            kickDefaultReason = validateAdminReason("admin.moderation.kick.default-reason", kickDefaultReason);
+            banDefaultReason = validateAdminReason("admin.moderation.ban.default-reason", banDefaultReason);
+            if (maxDurationDays < 1 || maxDurationDays > 36_500) {
+                throw new IllegalArgumentException("admin.moderation.ban.max-duration-days must be from 1 to 36500");
+            }
+        }
+
+        public static ModerationConfig defaults() {
+            return new ModerationConfig(true, "Removed by staff.", true, "Banned by staff.", 3_650);
+        }
+    }
+
+    public record AdminConfig(
+            boolean enabled,
+            VanishConfig vanish,
+            ModerationConfig moderation,
+            boolean prisonEnabled,
+            boolean inventoryInspectionEnabled) {
+
+        public AdminConfig {
+            if (vanish == null) vanish = VanishConfig.defaults();
+            if (moderation == null) moderation = ModerationConfig.defaults();
+        }
+
+        public static AdminConfig defaults() {
+            return new AdminConfig(true, VanishConfig.defaults(), ModerationConfig.defaults(), true, true);
+        }
+    }
+
     public UtilityConfig {
         EnumSet<Feature> featureCopy = enabledFeatures.isEmpty()
                 ? EnumSet.noneOf(Feature.class)
@@ -98,6 +139,25 @@ public record UtilityConfig(
         healNegativeEffects = Collections.unmodifiableSet(new LinkedHashSet<>(healNegativeEffects));
         if (afk == null) afk = AfkConfig.defaults();
         if (feedback == null) feedback = FeedbackConfig.defaults();
+        if (admin == null) admin = AdminConfig.defaults();
+    }
+
+    /** Compatibility constructor retained for source compiled against the pre-3.3 record shape. */
+    public UtilityConfig(
+            Set<Feature> enabledFeatures,
+            int feedFoodLevel,
+            float feedSaturation,
+            boolean feedResetExhaustion,
+            long feedCooldownNanos,
+            boolean healClearFire,
+            boolean healClearNegativeEffects,
+            Set<String> healNegativeEffects,
+            long healCooldownNanos,
+            AfkConfig afk,
+            FeedbackConfig feedback) {
+        this(enabledFeatures, feedFoodLevel, feedSaturation, feedResetExhaustion, feedCooldownNanos,
+                healClearFire, healClearNegativeEffects, healNegativeEffects, healCooldownNanos,
+                afk, feedback, AdminConfig.defaults());
     }
 
     /** Compatibility constructor retained for existing tests/integrations created before feedback settings existed. */
@@ -122,7 +182,8 @@ public record UtilityConfig(
                 healNegativeEffects,
                 healCooldownNanos,
                 AfkConfig.defaults(),
-                FeedbackConfig.defaults());
+                FeedbackConfig.defaults(),
+                AdminConfig.defaults());
     }
 
     public static UtilityConfig from(FileConfiguration config) {
@@ -167,6 +228,23 @@ public record UtilityConfig(
                 readBoolean(config, "feedback.afk.return-actionbar.enabled", true),
                 secondsToNanos(readLong(config, "feedback.afk.suppress-short-return-seconds", 8L, 0L, 300L)));
 
+        VanishConfig vanish = new VanishConfig(
+                readBoolean(config, "admin.vanish.enabled", true),
+                readBoolean(config, "admin.vanish.persist", true),
+                readBoolean(config, "admin.vanish.suppress-join-quit", true));
+        ModerationConfig moderation = new ModerationConfig(
+                readBoolean(config, "admin.moderation.kick.enabled", true),
+                readString(config, "admin.moderation.kick.default-reason", "Removed by staff.", 160),
+                readBoolean(config, "admin.moderation.ban.enabled", true),
+                readString(config, "admin.moderation.ban.default-reason", "Banned by staff.", 160),
+                readInt(config, "admin.moderation.ban.max-duration-days", 3_650, 1, 36_500));
+        AdminConfig admin = new AdminConfig(
+                readBoolean(config, "admin.enabled", true),
+                vanish,
+                moderation,
+                readBoolean(config, "admin.prison.enabled", true),
+                readBoolean(config, "admin.inventory-inspection.enabled", true));
+
         return new UtilityConfig(
                 enabled,
                 foodLevel,
@@ -178,7 +256,8 @@ public record UtilityConfig(
                 effects,
                 healCooldown,
                 afk,
-                feedback);
+                feedback,
+                admin);
     }
 
     public boolean enabled(Feature feature) {
@@ -270,6 +349,14 @@ public record UtilityConfig(
             throw invalid(path, "must be a single-line string up to 128 characters");
         }
         return value;
+    }
+
+    private static String validateAdminReason(String path, String value) {
+        if (value == null || value.isBlank()) throw invalid(path, "must not be blank");
+        if (value.length() > 160 || value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0) {
+            throw invalid(path, "must be a single-line string up to 160 characters");
+        }
+        return value.trim();
     }
 
     private static long secondsToNanos(long seconds) {

@@ -14,4 +14,9 @@ public interface PlexonUtilityAPI {
     default boolean isAfk(UUID playerId) {
         return false;
     }
+
+    /** Returns the current native PlexonUtility vanish state when the 3.3+ admin toolkit is active. */
+    default boolean isVanished(UUID playerId) {
+        return false;
+    }
 }
