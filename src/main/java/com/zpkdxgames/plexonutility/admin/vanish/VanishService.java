@@ -42,7 +42,7 @@ public final class VanishService {
         Objects.requireNonNull(target, "target");
         UUID id = target.getUniqueId();
         boolean changed = value ? vanished.add(id) : vanished.remove(id);
-        if (config.get().admin().vanish().persist()) data.setVanished(id, value);
+        if (changed && config.get().admin().vanish().persist()) data.setVanished(id, value);
         applyTarget(target);
         if (changed) audit.log(value ? "VANISH_ON" : "VANISH_OFF", actor, target, "state=" + value);
         return value;
