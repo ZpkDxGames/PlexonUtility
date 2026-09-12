@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'Add temporary 3.3 compile-fix workflow'
+    if: github.event.head_commit.message == 'Retry temporary 3.3 compile-fix workflow'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -25,10 +25,11 @@ jobs:
           from pathlib import Path
           path = Path('src/main/java/com/zpkdxgames/plexonutility/admin/gui/AdminMenuService.java')
           text = path.read_text()
-          old = '''        List<Player> online = Bukkit.getOnlinePlayers().stream()\n                .filter(Player::isConnected)\n                .sorted(Comparator.comparing(Player::getName, String.CASE_INSENSITIVE_ORDER))\n                .toList();'''
-          new = '''        List<? extends Player> online = Bukkit.getOnlinePlayers().stream()\n                .filter(Player::isConnected)\n                .sorted(Comparator.comparing(Player::getName, String.CASE_INSENSITIVE_ORDER))\n                .toList();'''
-          if old not in text:
-              raise SystemExit('Expected player-list block not found')
+          old = 'List<Player> online = Bukkit.getOnlinePlayers().stream()'
+          new = 'List<? extends Player> online = Bukkit.getOnlinePlayers().stream()'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one player-list declaration, found {count}')
           path.write_text(text.replace(old, new, 1))
           PY
           rm .github/workflows/agent-3.3-compile-fix.yml
