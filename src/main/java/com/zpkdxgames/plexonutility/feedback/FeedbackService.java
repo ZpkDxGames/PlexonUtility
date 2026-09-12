@@ -27,7 +27,8 @@ public final class FeedbackService implements AutoCloseable {
     private final MessageService messages;
     private final LongSupplier nanoTime;
     private final Map<UUID, BossBar> afkBars = new ConcurrentHashMap<>();
-    private final Map<UUID, Long> afkSince = new ConcurrentHashMap<>();
+    /** Timestamp only for AFK cycles whose public entry line was actually emitted. */
+    private final Map<UUID, Long> announcedAfkSince = new ConcurrentHashMap<>();
 
     public FeedbackService(JavaPlugin plugin, Supplier<UtilityConfig> config, MessageService messages) {
         this(plugin, config, messages, System::nanoTime);
@@ -55,9 +56,13 @@ public final class FeedbackService implements AutoCloseable {
 
     public void afkEntered(Player player, boolean announce) {
         UUID playerId = player.getUniqueId();
-        afkSince.put(playerId, nanoTime.getAsLong());
         showAfkBar(player);
-        if (announce) broadcastExcept(player, "afk-announcement-on", Map.of("player", player.getName()));
+        if (!announce) {
+            announcedAfkSince.remove(playerId);
+            return;
+        }
+        announcedAfkSince.put(playerId, nanoTime.getAsLong());
+        broadcastExcept(player, "afk-announcement-on", Map.of("player", player.getName()));
     }
 
     public void afkExited(Player player, boolean announce) {
@@ -67,10 +72,10 @@ public final class FeedbackService implements AutoCloseable {
             player.sendActionBar(messages.renderUnprefixed("afk-return-actionbar", Map.of()));
         }
 
-        Long enteredAt = afkSince.remove(playerId);
-        if (!announce) return;
+        Long enteredAt = announcedAfkSince.remove(playerId);
+        if (!announce || enteredAt == null) return;
         long minimum = config.get().feedback().afkSuppressShortReturnNanos();
-        if (enteredAt != null && minimum > 0L && nanoTime.getAsLong() - enteredAt < minimum) return;
+        if (minimum > 0L && nanoTime.getAsLong() - enteredAt < minimum) return;
         broadcastExcept(player, "afk-announcement-off", Map.of("player", player.getName()));
     }
 
@@ -85,7 +90,7 @@ public final class FeedbackService implements AutoCloseable {
 
     public void clearPlayer(Player player) {
         hideAfkBar(player);
-        afkSince.remove(player.getUniqueId());
+        announcedAfkSince.remove(player.getUniqueId());
     }
 
     public int activeBossbars() {
@@ -136,6 +141,6 @@ public final class FeedbackService implements AutoCloseable {
     public void close() {
         for (Player player : plugin.getServer().getOnlinePlayers()) hideAfkBar(player);
         afkBars.clear();
-        afkSince.clear();
+        announcedAfkSince.clear();
     }
 }
