@@ -135,6 +135,7 @@ jobs:
             'com/zpkdxgames/plexonutility/feedback/FeedbackService.class' \
             'com/zpkdxgames/plexonutility/integration/ComplementService.class' \
             'com/zpkdxgames/plexonutility/integration/FamilyCompatibilityService.class' \
+            'com/zpkdxgames/plexonutility/menu/UtilityMenuModel.class' \
             'com/zpkdxgames/plexonutility/menu/UtilityMenuService.class' \
             'com/zpkdxgames/plexonutility/trash/TrashService.class' \
             'com/zpkdxgames/plexonutility/placeholder/UtilityPlaceholderExpansion.class'; do
@@ -177,7 +178,7 @@ jobs:
           paper_api=26.2.build.121-stable
           plexoncore_compile_boundary=2.0.5
           core_services=text,gui,scheduler,integrations
-          utility_capabilities=quiet-feedback,afk-state,afk-event,placeholderapi,family-compatibility
+          utility_capabilities=quiet-feedback,afk-state,afk-event,placeholderapi,family-compatibility,premium-utility-menu
           source_closure=VERIFIED
           runtime_deployment=FOLLOW_UP_NON_BLOCKING
           EOF
