@@ -63,12 +63,12 @@ jobs:
               sys.exit(1)
           PY
 
-      - name: Verify 3.3 distribution
+      - name: Verify 3.4 distribution
         shell: bash
         run: |
           set -euo pipefail
           VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
-          test "$VERSION" = '3.3.0'
+          test "$VERSION" = '3.4.0'
           JAR="target/PlexonUtility-${VERSION}.jar"
           test -s "$JAR"
           jar tf "$JAR" > target/jar-contents.txt
@@ -105,6 +105,7 @@ jobs:
           unzip -p "$JAR" plugin.yml > target/plugin.yml
           grep -F "version: '${VERSION}'" target/plugin.yml
           grep -F "api-version: '26.2'" target/plugin.yml
+          grep -F "plexonutility.admin.invsee.edit:" target/plugin.yml
           for command in utility utilityadmin invsee vanish kick ban unban prison trash afk; do
             grep -F "  ${command}:" target/plugin.yml
           done

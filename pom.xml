@@ -5,7 +5,7 @@
 
   <groupId>com.zpkdxgames</groupId>
   <artifactId>PlexonUtility</artifactId>
-  <version>3.3.0</version>
+  <version>3.4.0</version>
   <name>PlexonUtility</name>
   <description>Core-native player utilities plus a focused native staff control plane for PlexonCraft.</description>
   <url>https://github.com/ZpkDxGames/PlexonUtility</url>
