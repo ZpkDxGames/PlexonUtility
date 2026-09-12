@@ -14,11 +14,13 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,7 +32,7 @@ class VanishServiceTest {
         AdminDataStore data = mock(AdminDataStore.class);
         when(data.snapshot()).thenReturn(AdminDataStore.Snapshot.empty());
         AdminAuditService audit = mock(AdminAuditService.class);
-        UtilityConfig config = config(false);
+        UtilityConfig config = config(false, true, true);
 
         try (MockedStatic<Bukkit> bukkit = org.mockito.Mockito.mockStatic(Bukkit.class)) {
             bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(target, viewer));
@@ -52,7 +54,7 @@ class VanishServiceTest {
         when(viewer.canSee(target)).thenReturn(true);
         AdminDataStore data = mock(AdminDataStore.class);
         when(data.snapshot()).thenReturn(AdminDataStore.Snapshot.empty());
-        UtilityConfig config = config(false);
+        UtilityConfig config = config(false, true, true);
 
         try (MockedStatic<Bukkit> bukkit = org.mockito.Mockito.mockStatic(Bukkit.class)) {
             bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(target, viewer));
@@ -65,19 +67,73 @@ class VanishServiceTest {
         }
     }
 
-    @Test void persistenceOnlyWritesOnConfiguredStateChange() {
+    @Test void persistenceWritesOnlyForRealStateChangesAndToggleOffRestoresVisibility() {
         Plugin plugin = mock(Plugin.class);
         Player target = player("Staff");
+        Player viewer = player("Viewer");
+        when(viewer.canSee(target)).thenReturn(true);
         AdminDataStore data = mock(AdminDataStore.class);
         when(data.snapshot()).thenReturn(AdminDataStore.Snapshot.empty());
-        UtilityConfig config = config(true);
+        UtilityConfig config = config(true, true, true);
+
+        try (MockedStatic<Bukkit> bukkit = org.mockito.Mockito.mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(target, viewer));
+            VanishService service = new VanishService(plugin, () -> config, data, mock(AdminAuditService.class));
+            service.setVanished(target, true, target);
+            service.setVanished(target, true, target);
+            assertTrue(service.isVanished(target.getUniqueId()));
+            verify(data, times(1)).setVanished(target.getUniqueId(), true);
+
+            assertFalse(service.toggle(target, target));
+            assertFalse(service.isVanished(target.getUniqueId()));
+            verify(data, times(1)).setVanished(target.getUniqueId(), false);
+            verify(viewer).showPlayer(plugin, target);
+        }
+    }
+
+    @Test void joiningViewerReceivesCurrentVanishState() {
+        Plugin plugin = mock(Plugin.class);
+        Player target = player("Staff");
+        Player joining = player("JoiningViewer");
+        when(target.isOnline()).thenReturn(true);
+        AdminDataStore data = mock(AdminDataStore.class);
+        when(data.snapshot()).thenReturn(AdminDataStore.Snapshot.empty());
+        UtilityConfig config = config(false, true, true);
 
         try (MockedStatic<Bukkit> bukkit = org.mockito.Mockito.mockStatic(Bukkit.class)) {
             bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(target));
             VanishService service = new VanishService(plugin, () -> config, data, mock(AdminAuditService.class));
             service.setVanished(target, true, target);
-            assertTrue(service.isVanished(target.getUniqueId()));
-            verify(data).setVanished(target.getUniqueId(), true);
+            bukkit.when(() -> Bukkit.getPlayer(target.getUniqueId())).thenReturn(target);
+
+            service.onJoin(joining);
+
+            verify(joining).hidePlayer(plugin, target);
+            verify(joining).unlistPlayer(target);
+        }
+    }
+
+    @Test void disablingVanishOnReloadRestoresOwnedVisibilityAndClearsState() {
+        Plugin plugin = mock(Plugin.class);
+        Player target = player("Staff");
+        Player viewer = player("Viewer");
+        when(viewer.canSee(target)).thenReturn(true);
+        AdminDataStore data = mock(AdminDataStore.class);
+        when(data.snapshot()).thenReturn(AdminDataStore.Snapshot.empty());
+        AtomicReference<UtilityConfig> config = new AtomicReference<>(config(false, true, true));
+
+        try (MockedStatic<Bukkit> bukkit = org.mockito.Mockito.mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(target, viewer));
+            bukkit.when(() -> Bukkit.getPlayer(target.getUniqueId())).thenReturn(target);
+            VanishService service = new VanishService(plugin, config::get, data, mock(AdminAuditService.class));
+            service.setVanished(target, true, target);
+            config.set(config(false, true, false));
+
+            service.reload();
+
+            assertFalse(service.isVanished(target.getUniqueId()));
+            verify(viewer).showPlayer(plugin, target);
+            verify(viewer).listPlayer(target);
         }
     }
 
@@ -88,13 +144,13 @@ class VanishServiceTest {
         return player;
     }
 
-    private static UtilityConfig config(boolean persist) {
+    private static UtilityConfig config(boolean persist, boolean adminEnabled, boolean vanishEnabled) {
         return new UtilityConfig(
                 EnumSet.allOf(Feature.class), 20, 20.0F, true, 0L,
                 true, false, Set.of(), 0L,
                 UtilityConfig.AfkConfig.defaults(), UtilityConfig.FeedbackConfig.defaults(),
-                new UtilityConfig.AdminConfig(true,
-                        new UtilityConfig.VanishConfig(true, persist, true),
+                new UtilityConfig.AdminConfig(adminEnabled,
+                        new UtilityConfig.VanishConfig(vanishEnabled, persist, true),
                         UtilityConfig.ModerationConfig.defaults(), true, true));
     }
 }
