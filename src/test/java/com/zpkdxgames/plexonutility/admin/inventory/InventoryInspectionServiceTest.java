@@ -3,6 +3,7 @@ package com.zpkdxgames.plexonutility.admin.inventory;
 import com.zpkdxgames.plexoncore.gui.GuiService;
 import com.zpkdxgames.plexonutility.menu.UtilityMenuItemFactory;
 import com.zpkdxgames.plexonutility.message.MessageService;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
@@ -12,7 +13,10 @@ import java.util.Arrays;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -81,6 +85,65 @@ class InventoryInspectionServiceTest {
         verify(storage.original(), never()).setAmount(1);
     }
 
+    @Test void leftEditSwapsLiveSlotAndCursorUsingClones() {
+        StackClone current = stack(Material.DIAMOND, 5);
+        StackClone cursor = stack(Material.EMERALD, 2);
+
+        InventoryInspectionService.EditResult result = InventoryInspectionService.leftEdit(current.original(), cursor.original());
+
+        assertTrue(result.changed());
+        assertSame(cursor.copy(), result.slot());
+        assertSame(current.copy(), result.cursor());
+    }
+
+    @Test void leftEditIsNoOpForEquivalentStacks() {
+        ItemStack first = mock(ItemStack.class);
+        ItemStack second = mock(ItemStack.class);
+        when(first.getType()).thenReturn(Material.DIAMOND);
+        when(second.getType()).thenReturn(Material.DIAMOND);
+        when(first.getAmount()).thenReturn(3);
+        when(second.getAmount()).thenReturn(3);
+        when(first.isSimilar(second)).thenReturn(true);
+        when(first.clone()).thenReturn(mock(ItemStack.class));
+        when(second.clone()).thenReturn(mock(ItemStack.class));
+
+        InventoryInspectionService.EditResult result = InventoryInspectionService.leftEdit(first, second);
+
+        assertFalse(result.changed());
+    }
+
+    @Test void rightEditSplitsTargetStackOntoEmptyCursor() {
+        ItemStack current = mock(ItemStack.class);
+        ItemStack slotCopy = mock(ItemStack.class);
+        ItemStack cursorCopy = mock(ItemStack.class);
+        when(current.getType()).thenReturn(Material.DIAMOND);
+        when(current.getAmount()).thenReturn(5);
+        when(current.clone()).thenReturn(slotCopy, cursorCopy);
+
+        InventoryInspectionService.EditResult result = InventoryInspectionService.rightEdit(current, null);
+
+        assertTrue(result.changed());
+        assertSame(slotCopy, result.slot());
+        assertSame(cursorCopy, result.cursor());
+        verify(slotCopy).setAmount(2);
+        verify(cursorCopy).setAmount(3);
+    }
+
+    @Test void rightEditPlacesOneItemIntoEmptyTargetSlot() {
+        ItemStack cursor = mock(ItemStack.class);
+        ItemStack slotCopy = mock(ItemStack.class);
+        ItemStack cursorCopy = mock(ItemStack.class);
+        when(cursor.getType()).thenReturn(Material.EMERALD);
+        when(cursor.getAmount()).thenReturn(4);
+        when(cursor.clone()).thenReturn(slotCopy, cursorCopy);
+
+        InventoryInspectionService.EditResult result = InventoryInspectionService.rightEdit(null, cursor);
+
+        assertTrue(result.changed());
+        verify(slotCopy).setAmount(1);
+        verify(cursorCopy).setAmount(3);
+    }
+
     private static InventoryInspectionService service() {
         return new InventoryInspectionService(
                 mock(GuiService.class), mock(UtilityMenuItemFactory.class), mock(MessageService.class));
@@ -98,5 +161,15 @@ class InventoryInspectionServiceTest {
         return new CloneChain(original, firstClone, snapshotClone);
     }
 
+    private static StackClone stack(Material material, int amount) {
+        ItemStack original = mock(ItemStack.class);
+        ItemStack copy = mock(ItemStack.class);
+        when(original.getType()).thenReturn(material);
+        when(original.getAmount()).thenReturn(amount);
+        when(original.clone()).thenReturn(copy);
+        return new StackClone(original, copy);
+    }
+
     private record CloneChain(ItemStack original, ItemStack firstClone, ItemStack snapshotClone) { }
+    private record StackClone(ItemStack original, ItemStack copy) { }
 }

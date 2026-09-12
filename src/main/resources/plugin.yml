@@ -50,7 +50,7 @@ commands:
     aliases: [uadmin]
     permission: plexonutility.admin.menu
   invsee:
-    description: Open a read-only snapshot of an online player's inventory.
+    description: Inspect an online player's inventory; live editing requires a separate permission.
     usage: /invsee <player>
     permission: plexonutility.admin.invsee
   vanish:
@@ -106,6 +106,7 @@ permissions:
     children:
       plexonutility.admin.menu: true
       plexonutility.admin.invsee: true
+      plexonutility.admin.invsee.edit: true
       plexonutility.admin.vanish: true
       plexonutility.admin.vanish.see: true
       plexonutility.admin.kick: true
@@ -122,6 +123,8 @@ permissions:
   plexonutility.admin.menu:
     default: false
   plexonutility.admin.invsee:
+    default: false
+  plexonutility.admin.invsee.edit:
     default: false
   plexonutility.admin.vanish:
     default: false

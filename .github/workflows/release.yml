@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ steps.project.outputs.version }}"
-          test "$version" = '3.3.0'
+          test "$version" = '3.4.0'
           if [ "${GITHUB_EVENT_NAME}" = 'push' ]; then
             test "${GITHUB_REF_NAME}" = 'release/stable'
           fi
@@ -116,7 +116,7 @@ jobs:
           PROJECT_VERSION: ${{ steps.project.outputs.version }}
           SOURCE_SHA: ${{ steps.source.outputs.sha }}
 
-      - name: Verify 3.3 distribution and generate checksum
+      - name: Verify 3.4 distribution and generate checksum
         shell: bash
         run: |
           set -euo pipefail
@@ -157,6 +157,7 @@ jobs:
           unzip -p "$JAR" plugin.yml > target/plugin.yml
           grep -F "version: '${VERSION}'" target/plugin.yml
           grep -F "api-version: '26.2'" target/plugin.yml
+          grep -F "plexonutility.admin.invsee.edit:" target/plugin.yml
           for command in utility utilityadmin invsee vanish kick ban unban prison trash afk; do
             grep -F "  ${command}:" target/plugin.yml
           done
@@ -192,7 +193,7 @@ jobs:
           paper_api=26.2.build.121-stable
           plexoncore_compile_boundary=2.0.5
           core_services=text,gui,scheduler,integrations
-          utility_capabilities=quiet-feedback,afk-state,afk-event,placeholderapi,family-compatibility,premium-utility-menu,admin-toolkit,native-vanish,native-profile-moderation,prison-waypoint,read-only-invsee
+          utility_capabilities=quiet-feedback,afk-state,afk-event,placeholderapi,family-compatibility,premium-utility-menu,admin-toolkit,native-vanish,native-profile-moderation,prison-waypoint,editable-invsee
           source_closure=VERIFIED
           runtime_deployment=FOLLOW_UP_NON_BLOCKING
           EOF
