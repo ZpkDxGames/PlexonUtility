@@ -6,6 +6,7 @@ depend:
   - PlexonCore
 softdepend:
   - PlaceholderAPI
+  - PlexonHomes
 loadbefore:
   - Essentials
 commands:
@@ -44,8 +45,8 @@ commands:
     usage: /afk
     permission: plexonutility.afk
   utilityadmin:
-    description: PlexonUtility diagnostics, integrations and reload.
-    usage: /utilityadmin <diagnostics|integrations|reload>
+    description: PlexonUtility diagnostics, family compatibility, integrations and reload.
+    usage: /utilityadmin <diagnostics|family|integrations|reload>
     permission: plexonutility.admin
 permissions:
   plexonutility.menu:

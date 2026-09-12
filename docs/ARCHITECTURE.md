@@ -1,17 +1,31 @@
-# PlexonUtility 2.0 Architecture
+# PlexonUtility 3.0 Architecture
 
 ## Product role
 
-PlexonUtility owns small, generic player convenience actions that do not justify dedicated Plexon products. It is not a replacement for permissions, claims, rollbacks, anti-cheat, displays, profiling, world pre-generation, voice chat, economy, travel, homes, or other specialist systems.
+PlexonUtility owns small, generic player convenience actions that do not justify dedicated Plexon products. It may surface entry points and health for other PlexonFamily modules, but it does not duplicate their data, transactions, or gameplay authority.
+
+Examples:
+
+- PlexonHomes owns home persistence, limits, `/home`, `/homes`, and safe teleportation.
+- PlexonRanks owns rank progression and may grant `plexonhomes.limit.<N>` permissions.
+- PlexonChats owns chat formatting/routing.
+- PlexonTools, PlexonQuests, PlexonJobs, PlexonSkills and other gameplay modules retain their own reward/progression authority.
 
 ## Shared PlexonCore runtime
 
-The 2.0 module registers as `utility` against PlexonCore API `>=2.0 <3.0` and declares its enabled feature IDs plus these capabilities:
+The 3.0 module registers as `utility` against PlexonCore API `>=2.0 <3.0` and compiles against stable PlexonCore `2.0.5`.
+
+Capabilities include:
 
 - `utility-api`
+- `afk-state`
+- `afk-event`
+- `placeholderapi`
 - `core-text`
 - `core-gui`
 - `core-scheduler`
+- `core-integrations`
+- `family-compatibility`
 - `complement-diagnostics`
 
 Shared behavior is delegated to Core:
@@ -22,25 +36,77 @@ Shared behavior is delegated to Core:
 | Utility navigation GUI routing | `PlexonCore.gui()` |
 | Async → primary handoff | `PlexonCore.scheduler()` |
 | Module lifecycle | `PlexonCore.modules()` |
-| External ecosystem states | `PlexonCore.integrations()` |
+| PlexonFamily/external ecosystem states | `PlexonCore.integrations()` |
 
-This keeps listeners, GUI session tracking, text parsing policy, worker pools and ecosystem status centralized.
+Core module state updates and cleanup use the owner-aware API so an old plugin instance cannot mutate or remove a newer registration.
+
+## Text and MiniMessage policy
+
+PlexonUtility does not own a MiniMessage parser.
+
+- trusted static templates are rendered through `PlexonCore.text()`;
+- runtime values use `TextService.renderTemplate(...)` and are inserted as plain components;
+- configured MiniMessage is strict-validated at startup/reload;
+- static configured messages are component-cached until reload to avoid repeated parsing;
+- a reload clears the cache only after the candidate catalog is validated;
+- old message catalogs are migrated by copying only missing required keys from bundled defaults and persisting the result.
+
+This prevents unsafe runtime text parsing, repeated hot-path parser construction, and post-upgrade `Missing message: ...` output.
+
+## PlexonFamily compatibility
+
+`FamilyCompatibilityService` registers known family products in Core's integration registry and refreshes only at:
+
+- startup;
+- explicit Utility reload;
+- explicit `/utilityadmin family`/GUI refresh;
+- relevant plugin enable/disable events.
+
+There is no repeating compatibility poll.
+
+PlexonHomes receives special navigation integration in `/utility`: when the Core integration state is ready and the viewer has `plexonhomes.gui`, the hub delegates to `/homes` rather than creating a second homes implementation.
+
+## Home-limit permission contract
+
+PlexonHomes remains authoritative for home limits. Its numeric permission contract is intentionally suitable for PlexonRanks or LuckPerms automation:
+
+```text
+plexonhomes.limit.<N>
+plexonhomes.limit.unlimited
+```
+
+The highest active numeric node wins. Unlimited overrides numeric values. If neither exists, the PlexonHomes config default applies.
+
+PlexonUtility only documents/surfaces this contract; it does not cache, reinterpret, or override home limits.
+
+## AFK interoperability
+
+AFK state remains thread-safe, in-memory, and ephemeral.
+
+Consumers have three supported surfaces:
+
+1. `PlexonUtilityAPI#isAfk(UUID)` for point-in-time reads.
+2. `%plexonutility_afk%` / `%plexonutility_is_afk%` for PlaceholderAPI/TAB.
+3. `AfkStateChangeEvent` for push-based interoperability.
+
+`AfkStateChangeEvent` is informational, non-cancellable, and always fired on the primary thread after the tracker state changes. Async chat activity is handed back through `PlexonCore.scheduler()` before the event/notification is emitted.
 
 ## Local runtime state
 
 PlexonUtility locally owns only state that is specific and cheap:
 
-- monotonic cooldown timestamps
-- AFK activity timestamps/state
-- one AFK timeout scan task when automatic AFK is enabled
-- the current immutable validated utility configuration
-- the current validated message catalog
+- monotonic cooldown timestamps;
+- AFK activity timestamps/state;
+- one AFK timeout scan task when automatic AFK is enabled;
+- the current immutable validated utility configuration;
+- the current validated message catalog;
+- static rendered message components between reloads.
 
 No plugin-owned database is required. AFK state is intentionally ephemeral and cooldowns are cleared on quit.
 
 ## GUI surfaces
 
-`/utility` is a navigation/selection GUI and therefore uses the Core GUI service, including Core holder identity, click routing and session tracking.
+`/utility` is a protected 4-row navigation GUI using Core holder identity, click routing, and session tracking. It shows live player status, utility availability, permission states, family readiness, PlexonHomes navigation, refresh/close controls, and admin diagnostics.
 
 `/trash` intentionally does **not** use Core GUI routing because it must permit normal item movement. It creates a short-lived writable Bukkit inventory with a private holder; no persistent reference is retained after the view closes, so remaining contents are discarded.
 
@@ -50,11 +116,13 @@ No plugin-owned database is required. AFK state is intentionally ephemeral and c
 
 ## Performance constraints
 
-- no per-player repeating scheduler
-- no file/database/network I/O from gameplay event listeners
-- no plugin-local executor pool
-- no plugin-local navigation GUI listener/router
-- no plugin-local MiniMessage instance
-- AFK movement ignores rotation/sub-block movement
-- async chat state mutation remains thread-safe and UI notification handoff uses Core
-- external complement scans occur only at startup, explicit reload, or explicit integration diagnostics
+- no per-player repeating scheduler;
+- no file/database/network I/O from gameplay event listeners;
+- no plugin-local executor pool;
+- no plugin-local navigation GUI listener/router;
+- no plugin-local MiniMessage instance;
+- no recurring family/integration polling;
+- static message components cached between reloads;
+- AFK movement ignores rotation/sub-block movement;
+- async chat state mutation remains thread-safe and event/UI notification handoff uses Core;
+- external complement scans occur only at startup, explicit reload, or explicit integration diagnostics.

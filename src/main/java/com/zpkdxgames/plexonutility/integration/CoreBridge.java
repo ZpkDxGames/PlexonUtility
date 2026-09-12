@@ -33,9 +33,14 @@ public final class CoreBridge {
         Set<String> capabilities = new LinkedHashSet<>();
         enabledFeatures.stream().map(Feature::id).forEach(capabilities::add);
         capabilities.add("utility-api");
+        capabilities.add("afk-state");
+        capabilities.add("afk-event");
+        capabilities.add("placeholderapi");
         capabilities.add("core-text");
         capabilities.add("core-gui");
         capabilities.add("core-scheduler");
+        capabilities.add("core-integrations");
+        capabilities.add("family-compatibility");
         capabilities.add("complement-diagnostics");
 
         ModuleDescriptor descriptor = new ModuleDescriptor(
@@ -56,16 +61,16 @@ public final class CoreBridge {
     }
 
     public void ready(String detail) {
-        if (core != null) core.modules().updateState(MODULE_ID, ModuleState.READY, detail);
+        if (core != null) core.modules().updateState(MODULE_ID, plugin, ModuleState.READY, detail);
     }
 
     public void degraded(String detail) {
-        if (core != null) core.modules().updateState(MODULE_ID, ModuleState.DEGRADED, detail);
+        if (core != null) core.modules().updateState(MODULE_ID, plugin, ModuleState.DEGRADED, detail);
     }
 
     public void disconnect() {
         if (core != null) {
-            core.modules().unregister(MODULE_ID);
+            core.modules().unregisterOwnedBy(plugin);
             core = null;
         }
     }

@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.0.0 — 2026-09-11
+
+- Redesigned `/utility` into a 4-row Plexon-style hub with live player/AFK state, permission-aware actions, PlexonFamily status, refresh/close controls, and admin diagnostics.
+- Added optional PlexonHomes integration to the Utility hub while preserving PlexonHomes as the sole home/data/teleport authority.
+- Documented the existing rank-friendly `plexonhomes.limit.<N>` and `plexonhomes.limit.unlimited` contract for PlexonRanks/LuckPerms-driven slot progression.
+- Added lifecycle-driven PlexonFamily discovery through `PlexonCore.integrations()` with no polling scheduler.
+- Added `/utilityadmin family` and expanded diagnostics with family/Homes readiness.
+- Added public `AfkStateChangeEvent` so PlexonFamily modules can react to manual, timeout, and activity AFK transitions without polling.
+- Kept `%plexonutility_afk%` and `%plexonutility_is_afk%` PlaceholderAPI outputs for TAB and other display plugins.
+- Fixed old `messages.yml` upgrades: newly required keys are now copied from bundled defaults, persisted, and existing custom values remain untouched.
+- Added static MiniMessage component caching between reloads and retained safe runtime value insertion through PlexonCore `TextService` tag resolvers.
+- Moved the compile boundary to stable PlexonCore `2.0.5` and adopted owner-aware module state updates/cleanup.
+- Hardened CI/release verification for the new interoperability/event classes and immutable PlexonCore 2.0.5 artifact.
+- Added regression coverage for persisted message migration behavior and the PlexonFamily compatibility catalog.
+
 ## 2.0.0 — 2026-09-11
 
 - Promoted PlexonUtility into a fuller Core-native utility surface while preserving specialist-plugin ownership boundaries.
@@ -34,7 +49,6 @@
 - Added explicit `plexonutility.reload` authorization.
 - Removed the misleading no-op `migration.claim-standard-commands` setting.
 - Expanded regression coverage for utility commands, configuration, messages, and cooldown behavior.
-- Hardened CI distribution verification and RC release evidence generation.
 
 ## 1.0.0 — 2026-09-09
 

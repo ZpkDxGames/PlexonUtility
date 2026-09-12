@@ -24,20 +24,20 @@ jobs:
           java-version: '25'
           cache: maven
 
-      - name: Provision immutable PlexonCore 2.0.0
+      - name: Provision immutable PlexonCore 2.0.5
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${RUNNER_TEMP}/PlexonCore-2.0.0.jar"
+          core_jar="${RUNNER_TEMP}/PlexonCore-2.0.5.jar"
           curl --fail --location --silent --show-error \
             --output "$core_jar" \
-            "https://github.com/ZpkDxGames/PlexonCore/releases/download/v2.0.0/PlexonCore-2.0.0.jar"
-          echo "179b82ce7fd82e3095b3a6d0d893af6d7c97f91bd7ce403e96d7f3581462dfec  $core_jar" | sha256sum --check
+            "https://github.com/ZpkDxGames/PlexonCore/releases/download/v2.0.5/PlexonCore-2.0.5.jar"
+          echo "bf4df796e83571e76c06b296c75c5e73ddc8053cb2c587d74c08cd3922e0b4d4  $core_jar" | sha256sum --check
           mvn -B -ntp org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
             -Dfile="$core_jar" \
             -DgroupId=com.zpkdxgames \
             -DartifactId=PlexonCore \
-            -Dversion=2.0.0 \
+            -Dversion=2.0.5 \
             -Dpackaging=jar \
             -DgeneratePom=true
 
@@ -77,9 +77,11 @@ jobs:
           for class in \
             'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' \
             'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' \
+            'com/zpkdxgames/plexonutility/api/event/AfkStateChangeEvent.class' \
             'com/zpkdxgames/plexonutility/afk/AfkManager.class' \
             'com/zpkdxgames/plexonutility/afk/AfkTracker.class' \
             'com/zpkdxgames/plexonutility/integration/ComplementService.class' \
+            'com/zpkdxgames/plexonutility/integration/FamilyCompatibilityService.class' \
             'com/zpkdxgames/plexonutility/menu/UtilityMenuService.class' \
             'com/zpkdxgames/plexonutility/trash/TrashService.class' \
             'com/zpkdxgames/plexonutility/placeholder/UtilityPlaceholderExpansion.class'; do
