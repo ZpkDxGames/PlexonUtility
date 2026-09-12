@@ -4,6 +4,7 @@ import com.zpkdxgames.plexoncore.text.TextService;
 import com.zpkdxgames.plexoncore.text.TextService.TextMode;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.feature.Feature;
+import com.zpkdxgames.plexonutility.feedback.FeedbackService;
 import com.zpkdxgames.plexonutility.message.MessageService;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -22,11 +23,17 @@ public final class TrashService implements CommandExecutor {
     private final Supplier<UtilityConfig> config;
     private final MessageService messages;
     private final TextService text;
+    private final FeedbackService feedback;
 
     public TrashService(Supplier<UtilityConfig> config, MessageService messages, TextService text) {
+        this(config, messages, text, null);
+    }
+
+    public TrashService(Supplier<UtilityConfig> config, MessageService messages, TextService text, FeedbackService feedback) {
         this.config = config;
         this.messages = messages;
         this.text = text;
+        this.feedback = feedback;
     }
 
     @Override
@@ -45,7 +52,8 @@ public final class TrashService implements CommandExecutor {
         Inventory inventory = Bukkit.createInventory(holder, 27, text.render(TextMode.MINIMESSAGE, TITLE));
         holder.inventory = inventory;
         player.openInventory(inventory);
-        messages.send(player, "trash-open");
+        if (feedback != null) feedback.success(player, "trash-open");
+        else messages.send(player, "trash-open");
         return true;
     }
 
