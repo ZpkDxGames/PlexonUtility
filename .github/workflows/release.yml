@@ -132,6 +132,7 @@ jobs:
             'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' \
             'com/zpkdxgames/plexonutility/api/event/AfkStateChangeEvent.class' \
             'com/zpkdxgames/plexonutility/afk/AfkManager.class' \
+            'com/zpkdxgames/plexonutility/afk/AfkTracker.class' \
             'com/zpkdxgames/plexonutility/admin/AdminAuditService.class' \
             'com/zpkdxgames/plexonutility/admin/AdminDataStore.class' \
             'com/zpkdxgames/plexonutility/admin/gui/AdminMenuService.class' \
