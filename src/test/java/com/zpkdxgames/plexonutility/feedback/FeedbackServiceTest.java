@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,7 +44,7 @@ class FeedbackServiceTest {
         when(plugin.getServer()).thenReturn(server);
         Player subject = player("Alex");
         Player observer = player("Sam");
-        when(server.getOnlinePlayers()).thenReturn(List.of(subject, observer));
+        doReturn(List.of(subject, observer)).when(server).getOnlinePlayers();
 
         MessageService messages = mock(MessageService.class);
         Component entered = Component.text("Alex is now AFK");
@@ -77,7 +78,7 @@ class FeedbackServiceTest {
         when(plugin.getServer()).thenReturn(server);
         Player subject = player("Alex");
         Player observer = player("Sam");
-        when(server.getOnlinePlayers()).thenReturn(List.of(subject, observer));
+        doReturn(List.of(subject, observer)).when(server).getOnlinePlayers();
 
         MessageService messages = mock(MessageService.class);
         Component entered = Component.text("Alex is now AFK");
