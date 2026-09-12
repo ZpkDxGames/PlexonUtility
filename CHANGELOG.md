@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.1.0 — UNRELEASED
+## 3.1.0 — 2026-09-12
 
 - Added a centralized quiet-feedback presentation service with no scheduler or per-player polling.
 - AFK self-state now uses a persistent bossbar instead of chat; returning active uses a short actionbar.
@@ -10,6 +10,7 @@
 - Added configurable bossbar color/overlay, social-prefix behavior, actionbar policy, and AFK short-return suppression window.
 - Preserved safe MiniMessage rendering through `PlexonCore.text()` and added prefixless component caching for HUD/social surfaces.
 - Added lifecycle cleanup/reconciliation for AFK bossbars on activity, quit, reload, feature disable, and plugin shutdown.
+- Published the `quiet-feedback` capability through the PlexonCore module registry for ecosystem diagnostics and compatibility awareness.
 
 ## 3.0.0 — 2026-09-11
 
