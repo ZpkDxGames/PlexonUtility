@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - 'release/stable'
+  pull_request:
+    types: [closed]
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -14,12 +18,19 @@ concurrency:
 
 jobs:
   release:
+    if: github.event_name == 'push' || (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact stable candidate
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+
+      - name: Capture exact source SHA
+        id: source
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Java 25
         uses: actions/setup-java@v5
@@ -38,12 +49,14 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ steps.project.outputs.version }}"
-          test "${GITHUB_REF_NAME}" = 'release/stable'
+          if [ "${GITHUB_EVENT_NAME}" = 'push' ]; then
+            test "${GITHUB_REF_NAME}" = 'release/stable'
+          fi
           case "${version}" in
             *-*) echo "Stable release workflow refuses prerelease version: ${version}" >&2; exit 1 ;;
           esac
           git fetch origin main
-          test "${GITHUB_SHA}" = "$(git rev-parse origin/main)"
+          test "${{ steps.source.outputs.sha }}" = "$(git rev-parse origin/main)"
           test -s "releases/${version}.md"
           test -z "$(git ls-remote --tags origin "refs/tags/v${version}" || true)"
 
@@ -87,7 +100,7 @@ jobs:
           lines = [
               "repository=ZpkDxGames/PlexonUtility",
               f"version={version}",
-              f"commit={os.environ['GITHUB_SHA']}",
+              f"commit={os.environ['SOURCE_SHA']}",
               *(f"{key}={value}" for key, value in totals.items()),
               f"result={'PASS' if passed else 'FAIL'}",
           ]
@@ -100,6 +113,7 @@ jobs:
           PY
         env:
           PROJECT_VERSION: ${{ steps.project.outputs.version }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
 
       - name: Verify distribution and generate checksum
         shell: bash
@@ -151,10 +165,10 @@ jobs:
           VERSION="${{ steps.project.outputs.version }}"
           cat > target/PROVENANCE.txt <<EOF
           repository=ZpkDxGames/PlexonUtility
-          branch=release/stable
+          trigger=${GITHUB_EVENT_NAME}
           version=${VERSION}
           tag=v${VERSION}
-          commit=${GITHUB_SHA}
+          commit=${{ steps.source.outputs.sha }}
           java=25
           class_major=69
           paper_api=26.2.build.121-stable
@@ -168,7 +182,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.project.outputs.version }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ steps.source.outputs.sha }}
           name: PlexonUtility ${{ steps.project.outputs.version }}
           prerelease: false
           body_path: releases/${{ steps.project.outputs.version }}.md
