@@ -45,6 +45,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -77,7 +78,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             cooldowns = new CooldownService();
             coreBridge = new CoreBridge(this);
             PlexonCoreAPI core = coreBridge.connect(utilityConfig.enabledFeatures(), utilityConfig.admin());
-            validateSyntheticPresence(core, utilityConfig);
+            validate350Config(core, utilityConfig);
             messages = new MessageService(this, core.text());
             feedback = new FeedbackService(this, this::utilityConfig, messages);
 
@@ -194,7 +195,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
     public void reloadUtilityState() {
         UtilityConfig candidateConfig = loadUtilityConfigCandidate();
         YamlConfiguration candidateMessages = messages.loadCandidate();
-        validateSyntheticPresence(coreBridge.core(), candidateConfig);
+        validate350Config(coreBridge.core(), candidateConfig);
 
         messages.apply(candidateMessages);
         utilityConfig = candidateConfig;
@@ -240,12 +241,17 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         return UtilityConfig.from(candidate);
     }
 
-    private static void validateSyntheticPresence(PlexonCoreAPI core, UtilityConfig config) {
+    private static void validate350Config(PlexonCoreAPI core, UtilityConfig config) {
+        if (config.admin().playerManagement().godPersist()) {
+            throw new IllegalArgumentException("admin.player-management.god.persist must remain false in PlexonUtility 3.5.0");
+        }
         UtilityConfig.SyntheticPresenceConfig synthetic = config.admin().vanish().syntheticPresence();
         for (String template : List.of(synthetic.quitTemplate(), synthetic.joinTemplate())) {
             String validation = template.replace("<player>", "player");
             var result = core.text().validateMiniMessage(validation);
-            if (!result.valid()) throw new IllegalArgumentException("admin.vanish.synthetic-presence fallback has invalid MiniMessage: " + result.reason());
+            if (!result.valid()) {
+                throw new IllegalArgumentException("admin.vanish.synthetic-presence fallback has invalid MiniMessage: " + result.reason());
+            }
         }
     }
 
