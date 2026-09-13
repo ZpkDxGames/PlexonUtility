@@ -110,7 +110,7 @@ public final class Admin350MenuService {
         builder.button(10, actionIcon(player, Material.IRON_SWORD, "<red><bold>Entity Cleanup</bold></red>",
                 "Preview a selector and scope before a mandatory confirmation.", "plexonutility.admin.killall",
                 entity.killall().enabled()), click -> openCleanupDialog(click.player()));
-        builder.button(13, entityPolicyIcon());
+        builder.button(13, entityPolicyIcon(), click -> { });
         builder.button(16, actionIcon(player, Material.SPAWNER, "<green><bold>Spawn Mob</bold></green>",
                 "Spawn a bounded batch at a validated safe loaded location.", "plexonutility.admin.spawnmob",
                 entity.spawnmob().enabled()), click -> openSpawnDialog(click.player()));
@@ -164,7 +164,7 @@ public final class Admin350MenuService {
                         items.template("<aqua><bold>Manage <player></bold></aqua>", Map.of("player", target.getName())), 5)
                 .filler(Material.BLACK_STAINED_GLASS_PANE);
         addFrame(builder, 5);
-        builder.button(4, playerStateIcon(target));
+        builder.button(4, playerStateIcon(target), click -> openPlayerManagement(click.player(), targetId));
         builder.button(10, actionIcon(viewer, Material.GRASS_BLOCK, "<green><bold>Game Mode</bold></green>",
                 "Choose Survival, Creative, Adventure or Spectator.", "plexonutility.admin.gamemode",
                 policy.gamemodeEnabled()), click -> openGameMode(click.player(), targetId));
@@ -197,7 +197,7 @@ public final class Admin350MenuService {
         var builder = gui.builder("utility", "inventory-management-3.5",
                         items.template("<aqua><bold>Inventory: <player></bold></aqua>", Map.of("player", target.getName())), 3)
                 .filler(Material.BLACK_STAINED_GLASS_PANE);
-        builder.button(4, playerStateIcon(target));
+        builder.button(4, playerStateIcon(target), click -> openInventoryManagement(click.player(), targetId));
         builder.button(10, actionIcon(viewer, Material.CHEST, "<aqua><bold>Inspect / Edit</bold></aqua>",
                 "Open the existing permission-separated live inventory view.", "plexonutility.admin.invsee",
                 config.get().admin().inventoryInspectionEnabled()), click -> inspect(click.player(), targetId));
