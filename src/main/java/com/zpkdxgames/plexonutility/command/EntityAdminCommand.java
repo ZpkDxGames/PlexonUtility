@@ -22,8 +22,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -39,7 +37,8 @@ public final class EntityAdminCommand implements TabExecutor {
     private final MessageService messages;
     private final EntityCleanupService cleanup;
     private final EntitySpawnService spawning;
-    private final Map<String, PendingCleanup> pending = new ConcurrentHashMap<>();
+    private final TimedConfirmationStore<EntityCleanupService.Query> pending =
+            new TimedConfirmationStore<>(CONFIRM_TTL_NANOS, System::nanoTime);
 
     public EntityAdminCommand(Supplier<UtilityConfig> config, MessageService messages,
                               EntityCleanupService cleanup, EntitySpawnService spawning) {
@@ -67,7 +66,7 @@ public final class EntityAdminCommand implements TabExecutor {
 
         if (args.length == 1 && args[0].equalsIgnoreCase("confirm")) return confirm(sender);
         if (args.length < 1 || args.length > 3) return false;
-        pending.remove(actorKey(sender));
+        pending.clear(actorKey(sender));
 
         EntitySelector.Selection selection;
         try {
@@ -89,7 +88,7 @@ public final class EntityAdminCommand implements TabExecutor {
 
         int threshold = entity.killall().confirmationThreshold();
         if (preview.removable() >= threshold && !sender.hasPermission("plexonutility.admin.killall.bypass-confirm")) {
-            pending.put(actorKey(sender), new PendingCleanup(query, System.nanoTime() + CONFIRM_TTL_NANOS));
+            pending.put(actorKey(sender), query);
             messages.send(sender, "admin-killall-confirm", Map.of(
                     "count", Integer.toString(preview.removable()), "seconds", "15"));
             return true;
@@ -99,12 +98,12 @@ public final class EntityAdminCommand implements TabExecutor {
     }
 
     private boolean confirm(CommandSender sender) {
-        PendingCleanup confirmation = pending.remove(actorKey(sender));
-        if (confirmation == null || System.nanoTime() > confirmation.expiresAtNanos()) {
+        EntityCleanupService.Query query = pending.consume(actorKey(sender)).orElse(null);
+        if (query == null) {
             messages.send(sender, "admin-killall-confirm-expired");
             return true;
         }
-        sendCleanupResult(sender, confirmation.query(), cleanup.execute(sender, confirmation.query()));
+        sendCleanupResult(sender, query, cleanup.execute(sender, query));
         return true;
     }
 
@@ -227,8 +226,7 @@ public final class EntityAdminCommand implements TabExecutor {
         if (args.length == 1) {
             Set<String> choices = new LinkedHashSet<>(CATEGORIES);
             choices.addAll(EntitySelector.livingNames());
-            PendingCleanup current = pending.get(actorKey(sender));
-            if (current != null && System.nanoTime() <= current.expiresAtNanos()) choices.add("confirm");
+            if (pending.hasValid(actorKey(sender))) choices.add("confirm");
             return filter(choices, args[0]);
         }
         if (args.length == 2 && sender instanceof Player) {
@@ -281,6 +279,4 @@ public final class EntityAdminCommand implements TabExecutor {
         if (sender instanceof Player player) return "player:" + player.getUniqueId();
         return "sender:" + sender.getName().toLowerCase(Locale.ROOT);
     }
-
-    private record PendingCleanup(EntityCleanupService.Query query, long expiresAtNanos) { }
 }
