@@ -87,9 +87,12 @@ class PlayerManagementServiceTest {
         Player player = player(GameMode.SURVIVAL);
         PlayerInventory inventory = mock(PlayerInventory.class);
         when(player.getInventory()).thenReturn(inventory);
-        when(inventory.getStorageContents()).thenReturn(new ItemStack[] {new ItemStack(Material.STONE), null});
-        when(inventory.getArmorContents()).thenReturn(new ItemStack[] {null, new ItemStack(Material.IRON_BOOTS), null, null});
-        when(inventory.getItemInOffHand()).thenReturn(new ItemStack(Material.SHIELD));
+        ItemStack storage = occupiedStack();
+        ItemStack armor = occupiedStack();
+        ItemStack offhand = occupiedStack();
+        when(inventory.getStorageContents()).thenReturn(new ItemStack[] {storage, null});
+        when(inventory.getArmorContents()).thenReturn(new ItemStack[] {null, armor, null, null});
+        when(inventory.getItemInOffHand()).thenReturn(offhand);
         PlayerManagementService service = service();
 
         int cleared = service.clearInventory(player, player);
@@ -97,7 +100,16 @@ class PlayerManagementServiceTest {
         org.junit.jupiter.api.Assertions.assertEquals(3, cleared);
         verify(inventory).clear();
         verify(inventory).setArmorContents(org.mockito.ArgumentMatchers.any(ItemStack[].class));
-        verify(inventory).setItemInOffHand(org.mockito.ArgumentMatchers.any(ItemStack.class));
+        verify(inventory).setItemInOffHand((ItemStack) null);
+    }
+
+    private static ItemStack occupiedStack() {
+        ItemStack item = mock(ItemStack.class);
+        Material type = mock(Material.class);
+        when(item.getType()).thenReturn(type);
+        when(type.isAir()).thenReturn(false);
+        when(item.getAmount()).thenReturn(1);
+        return item;
     }
 
     private static PlayerManagementService service() {

@@ -3,7 +3,6 @@ package com.zpkdxgames.plexonutility.admin.player;
 import com.zpkdxgames.plexonutility.admin.AdminAuditService;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import org.bukkit.GameMode;
-import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -101,7 +100,7 @@ public final class PlayerManagementService implements Listener {
         if (!empty(inventory.getItemInOffHand())) cleared++;
         inventory.clear();
         inventory.setArmorContents(new ItemStack[] {null, null, null, null});
-        inventory.setItemInOffHand(new ItemStack(Material.AIR));
+        inventory.setItemInOffHand(null);
         target.updateInventory();
         audit.log("CLEARINVENTORY", actor, target, "stacks=" + cleared);
         return cleared;

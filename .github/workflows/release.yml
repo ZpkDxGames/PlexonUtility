@@ -44,12 +44,12 @@ jobs:
         shell: bash
         run: echo "version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> "$GITHUB_OUTPUT"
 
-      - name: Verify stable release boundary
+      - name: Verify stable release and runtime boundaries
         shell: bash
         run: |
           set -euo pipefail
           version="${{ steps.project.outputs.version }}"
-          test "$version" = '3.4.0'
+          test "$version" = '3.5.0'
           if [ "${GITHUB_EVENT_NAME}" = 'push' ]; then
             test "${GITHUB_REF_NAME}" = 'release/stable'
           fi
@@ -59,6 +59,11 @@ jobs:
           git fetch origin main
           test "${{ steps.source.outputs.sha }}" = "$(git rev-parse origin/main)"
           test -s "releases/${version}.md"
+          evidence="releases/${version}-runtime-smoke.txt"
+          test -s "$evidence"
+          grep -Fx 'result=PASS' "$evidence"
+          grep -Fx 'paper=26.2' "$evidence"
+          grep -Fx 'java=25' "$evidence"
           test -z "$(git ls-remote --tags origin "refs/tags/v${version}" || true)"
 
       - name: Provision immutable PlexonCore 2.0.5
@@ -71,12 +76,8 @@ jobs:
             "https://github.com/ZpkDxGames/PlexonCore/releases/download/v2.0.5/PlexonCore-2.0.5.jar"
           echo "bf4df796e83571e76c06b296c75c5e73ddc8053cb2c587d74c08cd3922e0b4d4  $core_jar" | sha256sum --check
           mvn -B -ntp org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
-            -Dfile="$core_jar" \
-            -DgroupId=com.zpkdxgames \
-            -DartifactId=PlexonCore \
-            -Dversion=2.0.5 \
-            -Dpackaging=jar \
-            -DgeneratePom=true
+            -Dfile="$core_jar" -DgroupId=com.zpkdxgames -DartifactId=PlexonCore \
+            -Dversion=2.0.5 -Dpackaging=jar -DgeneratePom=true
 
       - name: Verify release build
         run: mvn -B -ntp clean verify
@@ -86,37 +87,30 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import glob
-          import os
-          import sys
-          import xml.etree.ElementTree as ET
-
+          import glob, os, sys, xml.etree.ElementTree as ET
           totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
           for path in sorted(glob.glob('target/surefire-reports/TEST-*.xml')):
               root = ET.parse(path).getroot()
               for key in totals:
                   totals[key] += int(root.attrib.get(key, 0))
           passed = totals["tests"] > 0 and all(totals[k] == 0 for k in ("failures", "errors", "skipped"))
-          version = os.environ.get("PROJECT_VERSION", "unknown")
           lines = [
               "repository=ZpkDxGames/PlexonUtility",
-              f"version={version}",
+              f"version={os.environ.get('PROJECT_VERSION', 'unknown')}",
               f"commit={os.environ['SOURCE_SHA']}",
               *(f"{key}={value}" for key, value in totals.items()),
               f"result={'PASS' if passed else 'FAIL'}",
           ]
           text = "\n".join(lines) + "\n"
           print(text, end="")
-          with open('target/TEST_SUMMARY.txt', 'w', encoding='utf-8') as fh:
-              fh.write(text)
-          if not passed:
-              sys.exit(1)
+          open('target/TEST_SUMMARY.txt', 'w', encoding='utf-8').write(text)
+          if not passed: sys.exit(1)
           PY
         env:
           PROJECT_VERSION: ${{ steps.project.outputs.version }}
           SOURCE_SHA: ${{ steps.source.outputs.sha }}
 
-      - name: Verify 3.4 distribution and generate checksum
+      - name: Verify 3.5 distribution and generate checksum
         shell: bash
         run: |
           set -euo pipefail
@@ -124,55 +118,34 @@ jobs:
           JAR="target/PlexonUtility-${VERSION}.jar"
           test -s "$JAR"
           jar tf "$JAR" > target/jar-contents.txt
-          for resource in plugin.yml config.yml messages.yml; do
-            grep -qx "$resource" target/jar-contents.txt
-          done
+          for resource in plugin.yml config.yml messages.yml; do grep -qx "$resource" target/jar-contents.txt; done
           for class in \
             'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' \
             'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' \
-            'com/zpkdxgames/plexonutility/api/event/AfkStateChangeEvent.class' \
-            'com/zpkdxgames/plexonutility/afk/AfkManager.class' \
-            'com/zpkdxgames/plexonutility/afk/AfkTracker.class' \
-            'com/zpkdxgames/plexonutility/admin/AdminAuditService.class' \
-            'com/zpkdxgames/plexonutility/admin/AdminDataStore.class' \
-            'com/zpkdxgames/plexonutility/admin/gui/AdminMenuService.class' \
-            'com/zpkdxgames/plexonutility/admin/inventory/InventoryInspectionService.class' \
-            'com/zpkdxgames/plexonutility/admin/moderation/ModerationService.class' \
-            'com/zpkdxgames/plexonutility/admin/moderation/DurationParser.class' \
-            'com/zpkdxgames/plexonutility/admin/prison/PrisonService.class' \
-            'com/zpkdxgames/plexonutility/admin/vanish/VanishService.class' \
-            'com/zpkdxgames/plexonutility/admin/vanish/VanishListener.class' \
-            'com/zpkdxgames/plexonutility/command/AdminActionCommand.class' \
-            'com/zpkdxgames/plexonutility/feedback/FeedbackService.class' \
-            'com/zpkdxgames/plexonutility/integration/ComplementService.class' \
-            'com/zpkdxgames/plexonutility/integration/FamilyCompatibilityService.class' \
-            'com/zpkdxgames/plexonutility/menu/UtilityMenuItemFactory.class' \
-            'com/zpkdxgames/plexonutility/menu/UtilityMenuModel.class' \
-            'com/zpkdxgames/plexonutility/menu/UtilityMenuService.class' \
-            'com/zpkdxgames/plexonutility/service/PlayerUtilityService.class' \
-            'com/zpkdxgames/plexonutility/trash/TrashService.class' \
-            'com/zpkdxgames/plexonutility/placeholder/UtilityPlaceholderExpansion.class'; do
+            'com/zpkdxgames/plexonutility/api/event/VanishStateChangeEvent.class' \
+            'com/zpkdxgames/plexonutility/admin/entity/EntitySelector.class' \
+            'com/zpkdxgames/plexonutility/admin/entity/EntityCleanupService.class' \
+            'com/zpkdxgames/plexonutility/admin/entity/EntitySpawnService.class' \
+            'com/zpkdxgames/plexonutility/admin/player/PlayerManagementService.class' \
+            'com/zpkdxgames/plexonutility/admin/vanish/SyntheticPresenceBridge.class' \
+            'com/zpkdxgames/plexonutility/command/EntityAdminCommand.class' \
+            'com/zpkdxgames/plexonutility/command/PlayerAdminCommand.class'; do
             grep -qx "$class" target/jar-contents.txt
           done
           unzip -p "$JAR" plugin.yml > target/plugin.yml
           grep -F "version: '${VERSION}'" target/plugin.yml
           grep -F "api-version: '26.2'" target/plugin.yml
-          grep -F "plexonutility.admin.invsee.edit:" target/plugin.yml
-          for command in utility utilityadmin invsee vanish kick ban unban prison trash afk; do
+          for command in utility utilityadmin invsee vanish kick ban unban prison trash afk killall spawnmob gamemode fly god speed clearinventory anvil; do
             grep -F "  ${command}:" target/plugin.yml
           done
+          if grep -q '^  spawn:' target/plugin.yml; then
+            echo 'PlexonUtility must not register root /spawn; PlexonTravel owns it.' >&2
+            exit 1
+          fi
           unzip -p "$JAR" META-INF/MANIFEST.MF | tr -d '\r' | grep -F "Implementation-Version: ${VERSION}"
           javap -verbose -classpath "$JAR" com.zpkdxgames.plexonutility.PlexonUtilityPlugin | grep -F 'major version: 69'
-          for prefix in \
-            'com/zpkdxgames/plexoncore/' \
-            'me/clip/placeholderapi/' \
-            'io/papermc/' \
-            'org/bukkit/' \
-            'net/kyori/adventure/'; do
-            if grep -q "^${prefix}" target/jar-contents.txt; then
-              echo "Provided runtime classes must not be bundled: ${prefix}" >&2
-              exit 1
-            fi
+          for prefix in 'com/zpkdxgames/plexoncore/' 'me/clip/placeholderapi/' 'io/papermc/' 'org/bukkit/' 'net/kyori/adventure/'; do
+            if grep -q "^${prefix}" target/jar-contents.txt; then echo "Provided runtime classes must not be bundled: ${prefix}" >&2; exit 1; fi
           done
           (cd target && sha256sum "PlexonUtility-${VERSION}.jar" > SHA256SUMS.txt && sha256sum --check SHA256SUMS.txt)
           git diff --check
@@ -192,10 +165,10 @@ jobs:
           class_major=69
           paper_api=26.2.build.121-stable
           plexoncore_compile_boundary=2.0.5
-          core_services=text,gui,scheduler,integrations
-          utility_capabilities=quiet-feedback,afk-state,afk-event,placeholderapi,family-compatibility,premium-utility-menu,admin-toolkit,native-vanish,native-profile-moderation,prison-waypoint,editable-invsee
-          source_closure=VERIFIED
-          runtime_deployment=FOLLOW_UP_NON_BLOCKING
+          utility_capabilities=entity-management,entity-cleanup,entity-spawn,player-admin,gamemode-control,flight-control,god-mode,speed-control,inventory-clear,synthetic-presence,vanish-event
+          spawn_ownership=PlexonTravel
+          entity_spawn_command=/spawnmob
+          runtime_deployment=CERTIFIED
           EOF
 
       - name: Publish GitHub stable release
