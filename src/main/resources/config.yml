@@ -40,7 +40,6 @@ afk:
   announcements:
     enabled: true
   reset-on:
-    # Movement only counts when the player changes block coordinates/world.
     movement: true
     chat: true
     command: true
@@ -65,13 +64,58 @@ feedback:
       enabled: true
     suppress-short-return-seconds: 8
 
-# Focused native staff toolkit. Runtime state is stored in admin-data.yml, not here.
+# Native staff toolkit. Runtime state remains event-driven; no entity/vanish polling is introduced.
 admin:
   enabled: true
+
+  entity-management:
+    enabled: true
+    killall:
+      enabled: true
+      max-radius: 512
+      confirmation-threshold: 250
+      protect:
+        named: true
+        tamed: true
+        villagers: true
+        armor-stands: true
+        displays: true
+        plugin-metadata: true
+    spawnmob:
+      enabled: true
+      # Hard runtime ceiling is always 100; this value may only lower it.
+      max-amount: 100
+      safe-location-search: true
+      blocked-entity-types: []
+
+  player-management:
+    gamemode:
+      enabled: true
+    fly:
+      enabled: true
+    god:
+      enabled: true
+      # 3.5 keeps god mode restart-ephemeral. Persistence is reserved and must remain false.
+      persist: false
+    speed:
+      enabled: true
+    clearinventory:
+      enabled: true
+    anvil:
+      enabled: true
+
   vanish:
     enabled: true
     persist: true
     suppress-join-quit: true
+    synthetic-presence:
+      enabled: true
+      prefer-plexonchats: true
+      audience: ORDINARY_PLAYERS
+      fallback:
+        quit: '<gray><player> left the game</gray>'
+        join: '<gray><player> joined the game</gray>'
+
   moderation:
     kick:
       enabled: true

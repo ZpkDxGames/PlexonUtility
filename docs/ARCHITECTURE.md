@@ -1,159 +1,138 @@
-# PlexonUtility 3.1 Architecture
+# PlexonUtility 3.5 Architecture
 
-## Product role
+## Product role and ownership
 
-PlexonUtility owns small, generic player convenience actions that do not justify dedicated Plexon products. It may surface entry points and health for other PlexonFamily modules, but it does not duplicate their data, transactions, or gameplay authority.
+PlexonUtility owns small generic player conveniences plus bounded, auditable server/player administration that does not justify a dedicated Plexon product. Specialist Plexon Family plugins keep their domains:
 
-Examples:
+- PlexonTravel owns `/spawn`, `/hub`, `/back`, warps, RTP and TPA/destination travel.
+- PlexonHomes owns homes, limits and home teleport/data.
+- PlexonChats owns public/private chat routing, formatting and connection-message presentation when its public API exposes the needed surface.
+- PlexonBlacksmith owns repair/gameplay item servicing.
+- PlexonRanks/economy/gameplay modules keep rank, money, jobs, skills, quests, keys, crates and related data.
 
-- PlexonHomes owns home persistence, limits, `/home`, `/homes`, and safe teleportation.
-- PlexonRanks owns rank progression and may grant `plexonhomes.limit.<N>` permissions.
-- PlexonChats owns chat formatting/routing.
-- PlexonTools, PlexonQuests, PlexonJobs, PlexonSkills and other gameplay modules retain their own reward/progression authority.
+PlexonUtility 3.5 entity spawning is `/spawnmob`. It never registers root `/spawn`.
 
 ## Shared PlexonCore runtime
 
-The 3.x module registers as `utility` against PlexonCore API `>=2.0 <3.0` and compiles against stable PlexonCore `2.0.5`.
+The module registers as `utility` against PlexonCore API `>=2.0 <3.0` and compiles against PlexonCore `2.0.5`.
 
-Capabilities include:
+Core remains authoritative for text, GUI lifecycle, scheduling, module lifecycle and integration state. Active 3.5 capability registration additionally exposes the enabled administration surface, including:
 
-- `utility-api`
-- `afk-state`
-- `afk-event`
-- `placeholderapi`
-- `quiet-feedback`
-- `core-text`
-- `core-gui`
-- `core-scheduler`
-- `core-integrations`
-- `family-compatibility`
-- `complement-diagnostics`
+- `admin-toolkit`
+- `editable-invsee`
+- `native-vanish`
+- `synthetic-presence`
+- `vanish-event`
+- `entity-management`
+- `entity-cleanup`
+- `entity-spawn`
+- `player-admin`
+- `gamemode-control`
+- `flight-control`
+- `god-mode`
+- `speed-control`
+- `inventory-clear`
 
-Shared behavior is delegated to Core:
+Only capabilities whose configuration is active are advertised.
 
-| Concern | Owner |
-| --- | --- |
-| MiniMessage/text templates | `PlexonCore.text()` |
-| Utility navigation GUI routing | `PlexonCore.gui()` |
-| Async → primary handoff | `PlexonCore.scheduler()` |
-| Module lifecycle | `PlexonCore.modules()` |
-| PlexonFamily/external ecosystem states | `PlexonCore.integrations()` |
+## Command architecture
 
-Core module state updates and cleanup use the owner-aware API so an old plugin instance cannot mutate or remove a newer registration.
-
-## Text and MiniMessage policy
-
-PlexonUtility does not own a MiniMessage parser.
-
-- trusted static templates are rendered through `PlexonCore.text()`;
-- runtime values use `TextService.renderTemplate(...)` and are inserted as plain components;
-- configured MiniMessage is strict-validated at startup/reload;
-- prefixed and prefixless static configured messages are component-cached until reload;
-- a reload clears the caches only after the candidate catalog is validated;
-- old message catalogs are migrated by copying only missing required keys from bundled defaults and persisting the result.
-
-This prevents unsafe runtime text parsing, repeated hot-path parser construction, and post-upgrade `Missing message: ...` output.
-
-## Quiet feedback policy
-
-`FeedbackService` centralizes presentation rather than letting individual commands invent their own HUD/chat behavior.
-
-Default policy:
-
-| Event type | Default surface |
-| --- | --- |
-| Persistent personal state | Bossbar |
-| Short successful self-action | Actionbar |
-| Social state change affecting other players | Compact prefixless chat |
-| Error / permission / invalid state | Normal prefixed chat |
-| Admin diagnostics / reload | Normal prefixed chat |
-| Destructive interaction | GUI plus short actionbar warning |
-
-Current 3.1 applications:
-
-- AFK entry: persistent `AFK • You are currently away` bossbar for the affected player.
-- AFK exit: remove bossbar and show `You are active again` actionbar.
-- AFK social event: only other online players receive the compact chat line.
-- Fast AFK toggles: the public return line is suppressed when the AFK cycle is shorter than the configured threshold.
-- `/feed`, `/heal`, `/trash`: successful self-feedback uses actionbar by default.
-
-`FeedbackService` creates no scheduler. Bossbars are keyed by player UUID and are removed/replaced deterministically on active transition, quit, reload/feature-disable reconciliation, and plugin shutdown.
-
-Social AFK cycles track a monotonic timestamp only when the AFK entry announcement was actually emitted. A return announcement is therefore never emitted for a cycle whose entry announcement was disabled.
-
-## PlexonFamily compatibility
-
-`FamilyCompatibilityService` registers known family products in Core's integration registry and refreshes only at:
-
-- startup;
-- explicit Utility reload;
-- explicit `/utilityadmin family`/GUI refresh;
-- relevant plugin enable/disable events.
-
-There is no repeating compatibility poll.
-
-PlexonHomes receives special navigation integration in `/utility`: when the Core integration state is ready and the viewer has `plexonhomes.gui`, the hub delegates to `/homes` rather than creating a second homes implementation.
-
-## Home-limit permission contract
-
-PlexonHomes remains authoritative for home limits. Its numeric permission contract is intentionally suitable for PlexonRanks or LuckPerms automation:
+The legacy moderation executor remains focused on `/invsee`, `/vanish`, `/kick`, `/ban`, `/unban` and `/prison`. New 3.5 functionality is separated:
 
 ```text
-plexonhomes.limit.<N>
-plexonhomes.limit.unlimited
+command/
+  EntityAdminCommand
+  PlayerAdminCommand
+
+admin/entity/
+  EntitySelector
+  EntityCleanupService
+  EntitySpawnService
+
+admin/player/
+  PlayerManagementService
+
+admin/vanish/
+  VanishService
+  VanishListener
+  SyntheticPresenceBridge
+
+api/event/
+  VanishStateChangeEvent
 ```
 
-The highest active numeric node wins. Unlimited overrides numeric values. If neither exists, the PlexonHomes config default applies.
+Command classes own parsing, permission checks, confirmation state and tab completion. Services own business rules, mutation and aggregate audit output.
 
-PlexonUtility only documents/surfaces this contract; it does not cache, reinterpret, or override home limits.
+## Entity cleanup model
 
-## AFK interoperability
+`/killall` executes one bounded scan of the selected world/radius. Radius selection is spherical and never fans out explicit chunk loads.
 
-AFK state remains thread-safe, in-memory, and ephemeral.
+Unconditional protection includes players, interaction entities and markers. Default configurable protection additionally covers named entities, tamed entities, villagers, armor stands, displays and recognizable plugin/NPC metadata/tags. Bosses are protected unless the caller explicitly selects `bosses` or a boss entity type.
 
-Consumers have three supported surfaces:
+Large cleanup confirmation is:
 
-1. `PlexonUtilityAPI#isAfk(UUID)` for point-in-time reads.
-2. `%plexonutility_afk%` / `%plexonutility_is_afk%` for PlaceholderAPI/TAB.
-3. `AfkStateChangeEvent` for push-based interoperability.
+- actor-specific;
+- selector/scope-specific because the stored immutable query is the one executed;
+- memory-only;
+- 15 seconds;
+- overwritten/invalidated by a changed cleanup request;
+- free of scheduled cleanup tasks.
 
-`AfkStateChangeEvent` is informational, non-cancellable, and always fired on the primary thread after the tracker state changes. Async chat activity is handed back through `PlexonCore.scheduler()` before the event/feedback is emitted.
+Cleanup uses direct entity removal rather than simulated combat, avoiding intentional loot/XP/kill-credit semantics.
 
-## Local runtime state
+## Entity spawn model
 
-PlexonUtility locally owns only state that is specific and cheap:
+`/spawnmob` accepts only living, Paper-spawnable entity types and never `PLAYER`. Config can reduce the maximum or block specific types, but the runtime hard maximum is always 100.
 
-- monotonic cooldown timestamps;
-- AFK activity timestamps/state;
-- one AFK timeout scan task when automatic AFK is enabled;
-- active AFK bossbar handles keyed by UUID;
-- AFK public-announcement timestamps used only for short-cycle suppression;
-- the current immutable validated utility configuration;
-- the current validated message catalog;
-- static rendered message components between reloads.
+Placement searches only a small bounded set around the targeted block/player and requires the target chunk to already be loaded. It does not synchronously fan out chunk generation/loading. Entity creation stays on the normal server thread.
 
-No plugin-owned database is required. AFK state is intentionally ephemeral and cooldowns are cleared on quit.
+## Player administration state
 
-## GUI surfaces
+`PlayerManagementService` owns only cheap in-memory runtime state:
 
-`/utility` is a protected 4-row navigation GUI using Core holder identity, click routing, and session tracking. It shows live player status, utility availability, permission states, family readiness, PlexonHomes navigation, refresh/close controls, and admin diagnostics.
+- Utility-managed Survival/Adventure flight UUIDs;
+- god-mode UUIDs.
 
-`/trash` intentionally does **not** use Core GUI routing because it must permit normal item movement. It creates a short-lived writable Bukkit inventory with a private holder; no persistent reference is retained after the view closes, so remaining contents are discarded. The destructive warning is shown in the actionbar by default rather than consuming chat space.
+God mode is event-driven through damage cancellation and deliberately does not cancel void damage. It is restart-ephemeral in 3.5; `god.persist` is reserved and startup/reload rejects `true`.
 
-## External complements
+Utility flight never strips legitimate Creative/Spectator flight. Disabling Utility-managed flight resets fall distance before relinquishing `allowFlight`.
 
-`ComplementService` scans only for enabled specialist providers. It never proxies their commands or claims that PlexonUtility implements their functionality. Each category is published to `PlexonCore.integrations()` under a `UTILITY_*` namespace, with `READY` when at least one configured provider is enabled and `MISSING` otherwise.
+Speed values are range-validated before reaching Bukkit setters. Inventory clear explicitly covers storage, armor and offhand and writes one aggregate audit record.
 
-## Performance constraints
+## Vanish and synthetic presence
 
-- no per-player repeating scheduler;
-- no feedback scheduler or animation task;
-- no file/database/network I/O from gameplay event listeners;
-- no plugin-local executor pool;
-- no plugin-local navigation GUI listener/router;
-- no plugin-local MiniMessage instance;
-- no recurring family/integration polling;
-- prefixed and prefixless static message components cached between reloads;
-- AFK movement ignores rotation/sub-block movement;
-- async chat state mutation remains thread-safe and event/UI feedback handoff uses Core;
-- external complement scans occur only at startup, explicit reload, or explicit integration diagnostics.
+`VanishService` remains the single Utility vanish-state authority. Visibility/list state is still event-driven through plugin-aware Paper/Bukkit APIs; there is no visibility poll.
+
+On a real state transition:
+
+1. authoritative vanished state changes;
+2. viewer visibility/list state is reconciled;
+3. configured synthetic presence is broadcast to the intended audience;
+4. one aggregate audit record is emitted;
+5. `VanishStateChangeEvent` is fired.
+
+Repeated `on`/`off` requests do not emit synthetic presence, events or transition audit records.
+
+`SyntheticPresenceBridge` is presentation-only. It never creates or dispatches `PlayerJoinEvent`/`PlayerQuitEvent`. Default audience excludes the actor and viewers with `plexonutility.admin.vanish.see`.
+
+At the 3.5 implementation point, the public PlexonChats API has no synthetic connection-message renderer/broadcaster. Therefore Utility uses the configured fallback rendered through `PlexonCore.text()`. Plugin presence may be reported diagnostically, but Utility does not compile against or reflect into PlexonChats internals.
+
+Persisted vanished staff are loaded before viewer reconciliation. Real join/quit messages remain suppressible by `VanishListener`; synthetic leave/join is never emitted merely because the player genuinely reconnected/disconnected.
+
+## Configuration/reload
+
+Configuration is additive over 3.4. Existing files load with defaults for all 3.5 sections. Validation rejects out-of-range cleanup/spawn values, unsupported audiences, and the reserved 3.5 god persistence flag.
+
+Synthetic fallback MiniMessage is validated through the shared PlexonCore text service before the runtime configuration is accepted. Reload applies candidate messages/config only after validation, then reconciles AFK, vanish, player-management and integration state.
+
+## Local state and scheduling
+
+PlexonUtility locally owns only cheap product-specific state: cooldowns, AFK state/timestamps, configured vanish state, the existing admin-data snapshot, Utility-managed flight/god sets, and short-lived cleanup confirmations.
+
+3.5 adds **no permanent repeating task**. The existing single bounded AFK timeout scan remains the only regular Utility scheduler when enabled. No entity command creates one task per entity or leaves an orphan recurring task.
+
+## Publication boundary
+
+Source CI uses Java 25, Paper 26.2 and PlexonCore 2.0.5 and verifies tests plus final JAR contents/ownership (`/spawn` must be absent).
+
+Stable 3.5 publication is stricter than source CI: the release workflow also requires a committed `releases/3.5.0-runtime-smoke.txt` containing real Paper 26.2/Java 25 PASS evidence. Without it, source may merge but stable publication is intentionally blocked.

@@ -7,6 +7,7 @@ depend:
 softdepend:
   - PlaceholderAPI
   - PlexonHomes
+  - PlexonChats
 loadbefore:
   - Essentials
 commands:
@@ -73,6 +74,42 @@ commands:
     description: Manage the PlexonUtility prison holding waypoint.
     usage: /prison <status|set|goto|send|clear> [player]
     permission: plexonutility.admin.prison
+  killall:
+    description: Remove matching entities safely from the selected scope.
+    usage: /killall <category|entity> [radius|world [world]]
+    aliases: [entityclear, mobclear]
+    permission: plexonutility.admin.killall
+  spawnmob:
+    description: Spawn a bounded amount of an entity.
+    usage: /spawnmob <entity> [amount]
+    aliases: [mobspawn, entityspawn]
+    permission: plexonutility.admin.spawnmob
+  gamemode:
+    description: Change game mode.
+    usage: /gamemode <survival|creative|adventure|spectator> [player]
+    aliases: [gm]
+    permission: plexonutility.admin.gamemode
+  fly:
+    description: Toggle controlled survival/adventure flight.
+    usage: /fly [on|off] [player]
+    permission: plexonutility.admin.fly
+  god:
+    description: Toggle event-driven god mode.
+    usage: /god [on|off] [player]
+    permission: plexonutility.admin.god
+  speed:
+    description: Set or reset walk/fly speed.
+    usage: /speed <1-10|reset> [walk|fly] [player]
+    permission: plexonutility.admin.speed
+  clearinventory:
+    description: Clear your or another player's full inventory.
+    usage: /clearinventory [player]
+    aliases: [ci, clearinv]
+    permission: plexonutility.admin.clearinventory
+  anvil:
+    description: Open a native virtual anvil.
+    usage: /anvil
+    permission: plexonutility.anvil
 permissions:
   plexonutility.menu:
     default: true
@@ -100,6 +137,8 @@ permissions:
     default: true
   plexonutility.afk.auto.bypass:
     default: op
+  plexonutility.anvil:
+    default: false
 
   plexonutility.admin:
     default: op
@@ -119,6 +158,20 @@ permissions:
       plexonutility.admin.prison.clear: true
       plexonutility.admin.teleport: true
       plexonutility.admin.clearinventory: true
+      plexonutility.admin.clearinventory.others: true
+      plexonutility.admin.killall: true
+      plexonutility.admin.killall.world: true
+      plexonutility.admin.killall.bypass-confirm: true
+      plexonutility.admin.spawnmob: true
+      plexonutility.admin.gamemode: true
+      plexonutility.admin.gamemode.others: true
+      plexonutility.admin.fly: true
+      plexonutility.admin.fly.others: true
+      plexonutility.admin.god: true
+      plexonutility.admin.god.others: true
+      plexonutility.admin.speed: true
+      plexonutility.admin.speed.others: true
+      plexonutility.anvil: true
       plexonutility.reload: true
   plexonutility.admin.menu:
     default: false
@@ -154,6 +207,32 @@ permissions:
   plexonutility.admin.teleport:
     default: false
   plexonutility.admin.clearinventory:
+    default: false
+  plexonutility.admin.clearinventory.others:
+    default: false
+  plexonutility.admin.killall:
+    default: false
+  plexonutility.admin.killall.world:
+    default: false
+  plexonutility.admin.killall.bypass-confirm:
+    default: false
+  plexonutility.admin.spawnmob:
+    default: false
+  plexonutility.admin.gamemode:
+    default: false
+  plexonutility.admin.gamemode.others:
+    default: false
+  plexonutility.admin.fly:
+    default: false
+  plexonutility.admin.fly.others:
+    default: false
+  plexonutility.admin.god:
+    default: false
+  plexonutility.admin.god.others:
+    default: false
+  plexonutility.admin.speed:
+    default: false
+  plexonutility.admin.speed.others:
     default: false
   plexonutility.reload:
     default: op

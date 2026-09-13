@@ -1,117 +1,107 @@
 # PlexonUtility
 
-Core-native player utilities, quiet HUD feedback, PlexonFamily interoperability, and a focused native staff control plane for PlexonCraft.
+Core-native player utilities, quiet HUD feedback, PlexonFamily interoperability, and a bounded native staff control plane for PlexonCraft.
 
-## 3.3.0 stable surface
+## 3.5.0 surface
 
-PlexonUtility 3.3.0 preserves the 3.2 player Utility hub and adds a deliberately small administrative toolkit. It is not an Essentials clone and does not absorb specialist PlexonFamily responsibilities.
+PlexonUtility 3.5.0 is deliberately broader than the original Utility plugin but is still **not an Essentials clone**. It owns general-purpose conveniences and bounded administration only when no specialist Plexon Family plugin already owns the domain.
 
-Player commands:
+### Player commands
 
-- `/utility` — 45-slot player utility hub with live state, family readiness, PlexonHomes navigation, help, refresh/close, and Admin Center entry for authorized staff
+- `/utility`
 - `/feed [player]`
 - `/heal [player]`
 - `/enderchest [player]` (`/ec`)
 - `/workbench`
-- `/trash` — disposable writable inventory; remaining contents are destroyed on close
-- `/afk` — manual/automatic AFK state with bossbar/actionbar feedback, PlaceholderAPI, and the public AFK event/API
+- `/trash`
+- `/afk`
+- `/anvil` — native Paper anvil surface; vanilla anvil costs/rules remain authoritative
 
-Native admin commands:
+### Staff/admin commands
 
-- `/utilityadmin` (`/uadmin`) — opens the Admin Center for authorized players; console receives text diagnostics
-- `/utilityadmin diagnostics|family|integrations|reload`
-- `/invsee <player>` — online, exact-name, read-only cloned inventory snapshot including storage, armor, and offhand
-- `/vanish [on|off]` — self-vanish using Paper plugin-aware visibility and player-list APIs
+- `/utilityadmin` (`/uadmin`)
+- `/invsee <player>` — live inventory inspection; edit authority remains separately permissioned
+- `/vanish [on|off]`
 - `/kick <player> [reason...]`
-- `/ban <player> [duration|perm] [reason...]` — native profile-ban authority; duration examples: `30m`, `2h`, `1d`, `7d`, `30d`
-- `/unban <player>` — removes the same native profile ban
-- `/prison status|set|goto|send <player>|clear` — holding-location waypoint only, not a jail/sentence engine
+- `/ban <player> [duration|perm] [reason...]`
+- `/unban <player>`
+- `/prison status|set|goto|send <player>|clear`
+- `/killall <category|entity> [radius|world [world]]`
+- `/spawnmob <entity> [amount]`
+- `/gamemode <survival|creative|adventure|spectator> [player]` (`/gm`)
+- `/fly [on|off] [player]`
+- `/god [on|off] [player]`
+- `/speed <1-10|reset> [walk|fly] [player]`
+- `/clearinventory [player]` (`/ci`, `/clearinv`)
 
-## Admin Center
+## `/spawn` ownership
 
-The Admin Center uses `PlexonCore.gui()` for protected inventory navigation and Paper Dialogs for typed moderation input.
+PlexonUtility does **not** register root `/spawn`.
 
-Surfaces:
+- `/spawn` remains PlexonTravel travel-spawn authority.
+- `/spawnmob` is PlexonUtility entity creation.
 
-- 45-slot Admin Center
-- 54-slot deterministic alphabetical online-player selector
-- 45-slot player actions screen
-- compact prison management screen
-- paginated native profile-ban management screen
-- read-only inventory inspector
+This is enforced by CI against the packaged `plugin.yml`.
 
-Selected-player actions include player information, inventory inspection, Ender Chest, heal, feed, admin teleport-to, bring, send-to-prison, kick, and ban. Kick/ban have explicit final confirmation. Destructive self kick/ban is blocked from the GUI.
+## Entity cleanup safety
 
-Editable inventory inspection and clear-inventory are deliberately not shipped in 3.3.0. Read-only inspection avoids duplication/deletion races; `plexonutility.admin.clearinventory` is reserved for a future deliberately reviewed action.
+`/killall` supports category aliases such as `hostile`, `monsters`, `passive`, `animals`, `ambient`, `aquatic`, `water`, `bosses`, `mobs`, and `all`, plus explicit living `EntityType` names.
 
-## Native vanish
+Default safety rules:
 
-Vanish is event-driven and creates no polling task.
+- players are never valid targets;
+- named entities are protected;
+- tamed entities are protected;
+- villagers are protected;
+- armor stands/displays are protected;
+- plugin/NPC-marked entities are protected where detectable;
+- bosses are protected unless `bosses` or an explicit boss type is selected;
+- configured radius is bounded (default maximum 512);
+- large cleanup requires actor-specific 15-second confirmation;
+- removal is direct cleanup, not simulated player combat, and therefore does not intentionally create normal loot/XP/kill credit.
 
-- `viewer.hidePlayer(plugin, target)` / `showPlayer(...)` preserve plugin ownership semantics
-- player-list visibility is reconciled with Paper list/unlist APIs
-- staff with `plexonutility.admin.vanish.see` retain visibility
-- joining viewers receive the correct visibility state
-- optional persistence is stored in `admin-data.yml`
-- normal join/quit announcements can be suppressed for vanished staff
-- plugin-owned visibility is restored on shutdown
+## Entity spawning safety
 
-Do not intentionally operate PlexonUtility native vanish alongside another authoritative vanish engine. If production still uses SuperVanish or another provider, choose one authority during migration. TAB configurations that depended on `%supervanish_isvanished%` should be migrated to `%plexonutility_vanished%` or an equivalent native condition. PlexonChats join/quit handling should keep its hidden-message/respect-hidden behavior enabled during cutover.
+`/spawnmob` accepts only living Paper-spawnable entity types, never `PLAYER`.
 
-## Native moderation
+- default amount: 1
+- absolute maximum: 100
+- config may lower but never raise the maximum
+- placement uses a bounded safe search near the player/target block
+- candidate chunk must already be loaded
+- no arbitrary async Bukkit entity operation
+- no chunk fan-out and no permanent task
 
-PlexonUtility uses Paper/Bukkit profile bans rather than a private punishment database.
+## Player controls
 
-- online exact-name lookup first
-- cached/known offline profile lookup only; no synchronous web profile lookup on the primary thread
-- permanent and bounded-duration profile bans
-- actor/source and sanitized reason recorded by the native ban authority
-- online ban can kick the target as part of the supported API operation
-- kick uses Adventure `Component` feedback
-- destructive actions are logged with actor/target identity and relevant reason/duration
-- no IP bans, mute, freeze, punishment history, appeals, web moderation panel, or cross-server network bans
+`/gamemode`, `/fly`, `/god`, `/speed`, and `/clearinventory` use separate self/other permissions.
 
-## Prison waypoint
+- Utility-managed `/fly` applies to Survival/Adventure and never forcibly strips legitimate Creative/Spectator flight.
+- `/god` cancels applicable damage events rather than polling/restoring health. Void damage remains authoritative. State is intentionally restart-ephemeral in 3.5.0.
+- `/speed` validates the friendly 1–10/reset input before calling Bukkit setters.
+- `/clearinventory` explicitly clears storage, armor and offhand and audits one aggregate stack count.
 
-`/prison` owns one configurable holding location in `admin-data.yml`: world, coordinates, yaw, and pitch. It can be set, inspected, visited, used to send an online target, and cleared.
+## Vanish synthetic presence
 
-It does **not** implement movement locking, sentence timers, jailed-player persistence, automatic release/return, inventory confiscation, or punishment history.
+Native vanish remains event-driven with plugin-aware visibility/player-list operations and no visibility polling.
 
-## Persistence
+3.5.0 additionally provides presentation-only synthetic presence:
 
-Human-authored policy stays in `config.yml`. Runtime admin state stays in `admin-data.yml` with schema validation.
+- visible → vanished: ordinary viewers receive one synthetic leave;
+- vanished → visible: ordinary viewers receive one synthetic join;
+- repeated `/vanish on` or `/vanish off`: no duplicate synthetic message;
+- actor excluded;
+- `plexonutility.admin.vanish.see` viewers excluded from the ordinary audience by default;
+- real persisted vanished join/quit remains suppressible without duplicate synthetic lifecycle messages;
+- no fake `PlayerJoinEvent` or `PlayerQuitEvent` is dispatched.
 
-- prison waypoint and optional persistent vanish UUIDs only
-- writes occur only on state changes
-- writes use PlexonCore's IO scheduler lane
-- temporary-file + atomic-move where supported, recoverable replacement fallback otherwise
-- no disk I/O in movement/chat/inventory-click hot paths
-- corrupt/invalid admin data fails safely instead of silently resetting valid state
+`VanishStateChangeEvent` is available to integrations and fires only on a real state transition.
 
-## Menu/text safety
+PlexonChats remains the preferred connection-message formatting authority. Its current public API does not expose synthetic join/quit rendering, so 3.5.0 uses a configurable fallback rendered through `PlexonCore.text()` without depending on PlexonChats internals.
 
-All protected navigation stays on `PlexonCore.gui()`. All MiniMessage/template rendering stays on `PlexonCore.text()`.
+## API/interoperability
 
-- runtime/player/reason/world values use safe template insertion rather than being reparsed as MiniMessage markup
-- menu names/lore force vanilla italics off
-- irrelevant attribute tooltip clutter is hidden where appropriate
-- green = ready/success, aqua/cyan = information/navigation, yellow/gold = action/caution, red = destructive, gray = metadata/unavailable
-- no animation scheduler or plugin-local generic GUI router
-
-## Quiet feedback and AFK
-
-3.3 preserves the established quiet-feedback architecture:
-
-- persistent personal AFK state → bossbar
-- short successful self-actions → actionbar
-- compact social AFK state changes → prefixless chat by default
-- errors, permission failures, cooldowns, and detailed diagnostics → normal prefixed chat
-
-AFK remains the only shared repeating Utility task when automatic timeout is enabled. No admin capability adds a recurring scheduler.
-
-## Placeholder/API interoperability
-
-PlaceholderAPI outputs:
+PlaceholderAPI outputs remain:
 
 ```text
 %plexonutility_afk%
@@ -119,86 +109,97 @@ PlaceholderAPI outputs:
 %plexonutility_vanished%
 ```
 
-Public API:
+Public API/event surfaces include:
 
 - `PlexonUtilityAPI#isAfk(UUID)`
-- `PlexonUtilityAPI#isVanished(UUID)` — added as a binary-compatible default method
+- `PlexonUtilityAPI#isVanished(UUID)`
+- `PlexonUtilityAPI#isGodMode(UUID)`
 - `AfkStateChangeEvent`
+- `VanishStateChangeEvent`
+
+Core module registration conditionally advertises the active entity-management, player-admin, synthetic-presence and vanish-event capabilities.
 
 ## Specialist ownership boundary
 
 PlexonUtility does not absorb:
 
-- homes persistence/limits/teleports → PlexonHomes
-- spawn/hub/back/warps/TPA/player travel → PlexonTravel
-- repair/enchant gameplay → PlexonBlacksmith
-- ranks/permission progression → PlexonRanks / LuckPerms
-- economy/shops → the configured economy/shop providers
-- jobs → PlexonJobs
-- chat moderation/muting/social communication → PlexonChats
-- protection/claims → existing claims/flags providers
+- homes and home limits → PlexonHomes
+- spawn/hub/back/warps/RTP/TPA and destination travel → PlexonTravel
+- repair/gameplay item servicing → PlexonBlacksmith
+- chat routing/private messaging/social spy/connection formatting → PlexonChats
+- rank progression → PlexonRanks/LuckPerms
+- economy/shops, jobs, skills, quests, keys, crates, claims → their specialist providers
+- kits, mail, nicknames, IP bans, freeze, mute, punishment history, appeals, or cross-server moderation
 
-The 3.3 native admin scope intentionally supersedes older documentation that said all vanish/moderation must remain external, but only for the narrow capabilities documented above.
+## Persistence
 
-## PlexonHomes integration
+Human-authored policy stays in `config.yml`. Existing `admin-data.yml` continues to store the prison waypoint and optional persistent vanish UUIDs; 3.5.0 does not change its schema.
 
-PlexonHomes remains authoritative for home persistence, limits, `/home`, `/homes`, and teleport safety. PlexonUtility only navigates to the existing Homes GUI when that family integration is ready.
+God mode and Utility-managed flight are intentionally runtime-ephemeral. `admin.player-management.god.persist` is reserved and must remain `false` in 3.5.0.
 
-Rank-friendly limits remain:
+## Performance boundary
 
-```text
-plexonhomes.limit.<N>
-plexonhomes.limit.unlimited
-```
-
-## Runtime
-
-- Paper `26.2`
-- Java `25`
-- PlexonCore `2.0.5` compile/runtime boundary (`depend: PlexonCore`)
-- PlaceholderAPI optional
-- PlexonHomes optional integration
-- in-memory monotonic cooldowns
-- one shared AFK timeout scan only when automatic AFK is enabled
-- event-driven vanish; no vanish/prison/inventory/integration polling
-- no synchronous network profile lookup
+- Java 25
+- Paper 26.2
+- PlexonCore 2.0.5
+- no new permanent 3.5 scheduler/poller
+- one existing shared AFK timeout scan only when automatic AFK is enabled
+- no per-entity task fan-out
+- no entity command chunk fan-out
+- no plugin-local executor pool
+- no NMS/CraftBukkit reflection/packet fake-disconnect implementation
 
 ## Permissions
 
-Player-facing permissions remain unchanged. Admin permissions are granular and inherit from the OP-default `plexonutility.admin` parent:
+The OP-default `plexonutility.admin` parent includes the staff/admin capability set. Important 3.5 additions:
 
 ```text
-plexonutility.admin
-plexonutility.admin.menu
-plexonutility.admin.invsee
-plexonutility.admin.vanish
-plexonutility.admin.vanish.see
-plexonutility.admin.kick
-plexonutility.admin.ban
-plexonutility.admin.unban
-plexonutility.admin.prison
-plexonutility.admin.prison.set
-plexonutility.admin.prison.goto
-plexonutility.admin.prison.send
-plexonutility.admin.prison.clear
-plexonutility.admin.teleport
+plexonutility.admin.killall
+plexonutility.admin.killall.world
+plexonutility.admin.killall.bypass-confirm
+plexonutility.admin.spawnmob
+plexonutility.admin.gamemode
+plexonutility.admin.gamemode.others
+plexonutility.admin.fly
+plexonutility.admin.fly.others
+plexonutility.admin.god
+plexonutility.admin.god.others
+plexonutility.admin.speed
+plexonutility.admin.speed.others
 plexonutility.admin.clearinventory
-plexonutility.reload
+plexonutility.admin.clearinventory.others
+plexonutility.anvil
 ```
 
-## Build and stable release
+## Build and release
 
-CI provisions the immutable `PlexonCore-2.0.5.jar`, verifies its pinned SHA-256, installs it into the CI-local Maven repository, then runs:
+Canonical source verification provisions the pinned PlexonCore 2.0.5 artifact and runs:
 
 ```bash
 mvn -B -ntp clean verify
 ```
 
-The stable artifact is `PlexonUtility-3.3.0.jar`. Build/release verification checks Java class major `69`, Paper `26.2` metadata, required admin/runtime classes and command descriptors, all discovered tests with zero failures/errors/skips, provided-API isolation, SHA-256 generation, and `git diff --check`.
+CI verifies Java class major 69, Paper 26.2 metadata, required resources/classes/commands, provided-API isolation, all discovered tests with zero failures/errors/skips, SHA-256 generation, and the absence of a PlexonUtility root `/spawn` command.
 
-The stable release workflow publishes only the exact merged `main` source to tag `v3.3.0` and attaches:
+Stable 3.5.0 publication has an additional runtime gate. The release workflow requires committed real Paper staging evidence in:
 
-- `PlexonUtility-3.3.0.jar`
+```text
+releases/3.5.0-runtime-smoke.txt
+```
+
+with at least:
+
+```text
+result=PASS
+paper=26.2
+java=25
+```
+
+Without that evidence, source may be reviewable/mergeable but `v3.5.0` publication remains intentionally blocked.
+
+When certified, the stable release publishes:
+
+- `PlexonUtility-3.5.0.jar`
 - `SHA256SUMS.txt`
 - `TEST_SUMMARY.txt`
 - `PROVENANCE.txt`

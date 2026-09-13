@@ -52,7 +52,6 @@ jobs:
           import glob
           import sys
           import xml.etree.ElementTree as ET
-
           totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
           for path in sorted(glob.glob('target/surefire-reports/TEST-*.xml')):
               root = ET.parse(path).getroot()
@@ -63,12 +62,12 @@ jobs:
               sys.exit(1)
           PY
 
-      - name: Verify 3.4 distribution
+      - name: Verify 3.5 distribution
         shell: bash
         run: |
           set -euo pipefail
           VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
-          test "$VERSION" = '3.4.0'
+          test "$VERSION" = '3.5.0'
           JAR="target/PlexonUtility-${VERSION}.jar"
           test -s "$JAR"
           jar tf "$JAR" > target/jar-contents.txt
@@ -79,36 +78,31 @@ jobs:
             'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' \
             'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' \
             'com/zpkdxgames/plexonutility/api/event/AfkStateChangeEvent.class' \
-            'com/zpkdxgames/plexonutility/afk/AfkManager.class' \
-            'com/zpkdxgames/plexonutility/afk/AfkTracker.class' \
-            'com/zpkdxgames/plexonutility/admin/AdminAuditService.class' \
-            'com/zpkdxgames/plexonutility/admin/AdminDataStore.class' \
-            'com/zpkdxgames/plexonutility/admin/gui/AdminMenuService.class' \
-            'com/zpkdxgames/plexonutility/admin/inventory/InventoryInspectionService.class' \
-            'com/zpkdxgames/plexonutility/admin/moderation/ModerationService.class' \
-            'com/zpkdxgames/plexonutility/admin/moderation/DurationParser.class' \
-            'com/zpkdxgames/plexonutility/admin/prison/PrisonService.class' \
+            'com/zpkdxgames/plexonutility/api/event/VanishStateChangeEvent.class' \
+            'com/zpkdxgames/plexonutility/admin/entity/EntitySelector.class' \
+            'com/zpkdxgames/plexonutility/admin/entity/EntityCleanupService.class' \
+            'com/zpkdxgames/plexonutility/admin/entity/EntitySpawnService.class' \
+            'com/zpkdxgames/plexonutility/admin/gui/Admin350MenuService.class' \
+            'com/zpkdxgames/plexonutility/admin/player/PlayerManagementService.class' \
+            'com/zpkdxgames/plexonutility/admin/vanish/SyntheticPresenceBridge.class' \
             'com/zpkdxgames/plexonutility/admin/vanish/VanishService.class' \
-            'com/zpkdxgames/plexonutility/admin/vanish/VanishListener.class' \
-            'com/zpkdxgames/plexonutility/command/AdminActionCommand.class' \
-            'com/zpkdxgames/plexonutility/feedback/FeedbackService.class' \
-            'com/zpkdxgames/plexonutility/integration/ComplementService.class' \
-            'com/zpkdxgames/plexonutility/integration/FamilyCompatibilityService.class' \
-            'com/zpkdxgames/plexonutility/menu/UtilityMenuItemFactory.class' \
-            'com/zpkdxgames/plexonutility/menu/UtilityMenuModel.class' \
-            'com/zpkdxgames/plexonutility/menu/UtilityMenuService.class' \
-            'com/zpkdxgames/plexonutility/service/PlayerUtilityService.class' \
-            'com/zpkdxgames/plexonutility/trash/TrashService.class' \
-            'com/zpkdxgames/plexonutility/placeholder/UtilityPlaceholderExpansion.class'; do
+            'com/zpkdxgames/plexonutility/command/EntityAdminCommand.class' \
+            'com/zpkdxgames/plexonutility/command/PlayerAdminCommand.class' \
+            'com/zpkdxgames/plexonutility/command/TimedConfirmationStore.class' \
+            'com/zpkdxgames/plexonutility/admin/inventory/InventoryInspectionService.class'; do
             grep -qx "$class" target/jar-contents.txt
           done
           unzip -p "$JAR" plugin.yml > target/plugin.yml
           grep -F "version: '${VERSION}'" target/plugin.yml
           grep -F "api-version: '26.2'" target/plugin.yml
           grep -F "plexonutility.admin.invsee.edit:" target/plugin.yml
-          for command in utility utilityadmin invsee vanish kick ban unban prison trash afk; do
+          for command in utility utilityadmin invsee vanish kick ban unban prison trash afk killall spawnmob gamemode fly god speed clearinventory anvil; do
             grep -F "  ${command}:" target/plugin.yml
           done
+          if grep -q '^  spawn:' target/plugin.yml; then
+            echo 'PlexonUtility must not register root /spawn; PlexonTravel owns it.' >&2
+            exit 1
+          fi
           unzip -p "$JAR" META-INF/MANIFEST.MF | tr -d '\r' | grep -F "Implementation-Version: ${VERSION}"
           javap -verbose -classpath "$JAR" com.zpkdxgames.plexonutility.PlexonUtilityPlugin | grep -F 'major version: 69'
           for prefix in \

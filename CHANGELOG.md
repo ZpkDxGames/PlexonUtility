@@ -1,5 +1,28 @@
 # Changelog
 
+## 3.5.0 — 2026-09-12
+
+- Added bounded `/killall <category|entity> [radius|world [world]]` with player exclusion, conservative named/tamed/villager/armor-stand/display/plugin protections, explicit boss targeting, aggregate audit, and short-lived actor-specific confirmation for large removals.
+- Added `/spawnmob <entity> [amount]` with Paper spawnability validation, safe already-loaded nearby placement, configurable blocked types, and an absolute maximum of 100 entities.
+- Preserved PlexonTravel ownership of root `/spawn`; PlexonUtility registers `/spawnmob` only, and CI now rejects an accidental Utility `/spawn` registration.
+- Added permission-separated `/gamemode`, `/fly`, `/god`, `/speed`, and `/clearinventory`; Creative/Spectator flight is preserved, god mode is event-driven/restart-ephemeral, and clear inventory covers storage, armor, and offhand.
+- Added native `/anvil` while retaining vanilla anvil rules and costs.
+- Added transition-only synthetic leave/join presentation for native vanish with ordinary-player audience semantics, no fake Bukkit lifecycle events, no repeated broadcasts for unchanged state, and public `VanishStateChangeEvent` integration.
+- Kept PlexonChats as the preferred connection-message presentation authority; because its current public API has no synthetic connection renderer/broadcaster, 3.5.0 uses a configurable PlexonCore/MiniMessage fallback without depending on PlexonChats internals.
+- Added conditional Core capabilities for entity cleanup/spawn, player administration, flight/god/speed/inventory control, synthetic presence, and vanish events.
+- Preserved the existing `admin-data.yml` schema; optional god persistence was deliberately not introduced in 3.5.0.
+- Added focused regression coverage for entity selectors/protections/spawn limits, player control state, additive config compatibility, synthetic vanish audiences, and real transition-only behavior.
+- Updated Java 25 / Paper 26.2 CI and distribution verification for the 3.5.0 command/class boundary.
+- Added a hard stable-release runtime gate: publication requires committed real Paper 26.2/Java 25 smoke evidence before `v3.5.0` can be created.
+
+## 3.4.0 — 2026-09-12
+
+- Upgraded `/invsee` from snapshot-only viewing to a permission-separated live inventory editor.
+- Added `plexonutility.admin.invsee.edit`; view-only authority remains separate.
+- Added safe cursor-based edits for storage, armor, and offhand with immediate authoritative writes, multi-view refresh, logout cleanup, and per-edit audit records.
+- Cancelled unsupported vanilla transfer gestures that could otherwise mutate the mirror without an equivalent target-inventory write.
+- Preserved the rest of the 3.3 native admin toolkit and runtime boundary unchanged.
+
 ## 3.3.0 — 2026-09-12
 
 - Added a dedicated 45-slot Admin Center reachable from `/utility` and `/utilityadmin`, while preserving text diagnostics/family/integrations/reload subcommands and adding `/uadmin`.
@@ -16,7 +39,6 @@
 - Added a shared Utility menu item factory that forces non-italic names/lore and hides irrelevant attributes while keeping runtime values on safe Core template insertion.
 - Documented the native-vanish migration from old SuperVanish/TAB assumptions and preserved PlexonHomes/PlexonTravel/PlexonChats/PlexonRanks/PlexonBlacksmith ownership boundaries.
 - Expanded regression coverage for duration parsing, admin config/model behavior, inventory clone isolation, vanish authorization/persistence, prison coordinate fidelity, and moderation reason validation.
-- Deliberately deferred editable invsee and clear-inventory behavior; no freeze, mute, IP ban, punishment DB, appeals, web panel, cross-server moderation, rank/economy editor, or nickname system was added.
 
 ## 3.2.0 — 2026-09-12
 
@@ -28,7 +50,6 @@
 - Preserved PlexonHomes ownership and the `plexonhomes.limit.<N>` / `plexonhomes.limit.unlimited` contract without duplicating home-limit logic.
 - Preserved the 3.1 quiet-feedback AFK bossbar/actionbar/social model and kept Trash as a writable non-Core navigation inventory.
 - Kept all GUI routing on `PlexonCore.gui()` and all MiniMessage/template rendering on `PlexonCore.text()` with no new scheduler, poller, parser, or inventory listener.
-- Added deterministic availability-state regression tests and required the new menu model in canonical build/release distribution verification.
 
 ## 3.1.0 — 2026-09-12
 
@@ -46,59 +67,26 @@
 
 - Redesigned `/utility` into a 4-row Plexon-style hub with live player/AFK state, permission-aware actions, PlexonFamily status, refresh/close controls, and admin diagnostics.
 - Added optional PlexonHomes integration to the Utility hub while preserving PlexonHomes as the sole home/data/teleport authority.
-- Documented the existing rank-friendly `plexonhomes.limit.<N>` and `plexonhomes.limit.unlimited` contract for PlexonRanks/LuckPerms-driven slot progression.
-- Added lifecycle-driven PlexonFamily discovery through `PlexonCore.integrations()` with no polling scheduler.
-- Added `/utilityadmin family` and expanded diagnostics with family/Homes readiness.
-- Added public `AfkStateChangeEvent` so PlexonFamily modules can react to manual, timeout, and activity AFK transitions without polling.
-- Kept `%plexonutility_afk%` and `%plexonutility_is_afk%` PlaceholderAPI outputs for TAB and other display plugins.
-- Fixed old `messages.yml` upgrades: newly required keys are now copied from bundled defaults, persisted, and existing custom values remain untouched.
-- Added static MiniMessage component caching between reloads and retained safe runtime value insertion through PlexonCore `TextService` tag resolvers.
-- Moved the compile boundary to stable PlexonCore `2.0.5` and adopted owner-aware module state updates/cleanup.
-- Hardened CI/release verification for the new interoperability/event classes and immutable PlexonCore 2.0.5 artifact.
-- Added regression coverage for persisted message migration behavior and the PlexonFamily compatibility catalog.
+- Added public `AfkStateChangeEvent`, shared Core text/GUI/scheduler/integration services, module diagnostics, and stricter configuration/message migration validation.
+- Moved the compile boundary to stable PlexonCore `2.0.5` and hardened CI/release verification.
 
 ## 2.0.0 — 2026-09-11
 
 - Promoted PlexonUtility into a fuller Core-native utility surface while preserving specialist-plugin ownership boundaries.
-- Added `/utility`, a compact Plexon-style navigation hub backed by `PlexonCore.gui()` rather than a plugin-local inventory router.
-- Added `/trash`, a lightweight disposable 27-slot inventory with no persistence or scheduler cost.
-- Migrated configurable MiniMessage rendering to `PlexonCore.text()` and adopted the green→cyan PlexonUtility gradient.
-- Added MiniMessage validation at startup/reload and safe component insertion for runtime placeholder values.
-- Routed AFK async-to-primary notifications through `PlexonCore.scheduler()` while retaining one shared O(online players) timeout scan.
-- Expanded the Core module capability declaration for shared text, GUI, scheduler and complement diagnostics.
-- Added external complement detection for claims/regions, CoreProtect, LuckPerms, menu builders, anti-cheat, display/HUD, spark/Chunky and proximity voice.
-- Published complement states into `PlexonCore.integrations()` so ecosystem diagnostics share one control-plane view.
-- Expanded `/utilityadmin diagnostics` with Core health, GUI sessions and scheduler queue visibility and added `/utilityadmin integrations`.
-- Updated release verification to require the new 2.0 runtime classes and command descriptors.
-- Added regression coverage for complement detection and retained existing command/config/cooldown/AFK/message/placeholder tests.
+- Added `/utility`, `/trash`, Core-native MiniMessage/GUI/scheduler/integration use, and expanded diagnostics/complement discovery.
+- Retained the bounded AFK runtime and provided-API isolation.
 
 ## 1.0.1 — 2026-09-11
 
 - Promoted the accepted `1.0.1-rc.2` source line to stable `1.0.1` without broad product changes.
-- Retained the deliberately narrow utility ownership boundary: feed, heal, ender chest, workbench, AFK, diagnostics/reload, API, and AFK placeholders.
-- Retained the bounded AFK runtime with thread-safe in-memory state, block-coordinate activity filtering, and one shared scheduler.
-- Kept strict configuration validation, transactional candidate loading, exact target lookup, heal safety checks, and expanded regression coverage.
-- Updated Build CI so exact `main` commits are verified instead of being excluded.
-- Replaced version-specific publication workflows with one generic exact-`main` stable release workflow.
-- Added stable artifact verification for Java 25 bytecode, Paper 26.2 metadata, required classes/resources, provided-API isolation, test execution, and SHA-256 output.
+- Retained the deliberately narrow utility ownership boundary, strict validation, shared AFK scheduler, reproducible Java 25/Paper 26.2 CI, and immutable release packaging.
 
 ## 1.0.1-rc.1 — 2026-09-10
 
 - Recorded the Phase 2 product decision to keep PlexonUtility active with a deliberately narrow ownership boundary.
-- Added strict configuration type/range validation and transactional config/message candidate loading.
-- Added dead/invalid-player and invalid max-health protection for `/heal`.
-- Switched named player targeting to exact-name lookup and deterministic argument-count handling.
-- Added explicit `plexonutility.reload` authorization.
-- Removed the misleading no-op `migration.claim-standard-commands` setting.
-- Expanded regression coverage for utility commands, configuration, messages, and cooldown behavior.
+- Added strict configuration type/range validation, transactional candidate loading, heal safety checks, exact player targeting, reload authorization, and expanded tests.
 
 ## 1.0.0 — 2026-09-09
 
 - Initial PlexonCore 2.0-native release.
-- Added `/feed`, `/heal`, `/enderchest`/`/ec`, and `/workbench`.
-- Added explicit self/others/cooldown permissions.
-- Added immutable validated configuration and configurable MiniMessage feedback.
-- Added public `PlexonUtilityAPI` feature service.
-- Added Core module registration and diagnostics.
-- Added monotonic in-memory cooldowns with quit cleanup.
-- Added reproducible Java 25 / Paper 26.2 CI and immutable release packaging.
+- Added `/feed`, `/heal`, `/enderchest`/`/ec`, `/workbench`, AFK, API, placeholders, validated configuration, Core module registration, diagnostics, cooldowns, and Java 25/Paper 26.2 CI.

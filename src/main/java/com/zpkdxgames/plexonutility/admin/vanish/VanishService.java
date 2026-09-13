@@ -2,11 +2,13 @@ package com.zpkdxgames.plexonutility.admin.vanish;
 
 import com.zpkdxgames.plexonutility.admin.AdminAuditService;
 import com.zpkdxgames.plexonutility.admin.AdminDataStore;
+import com.zpkdxgames.plexonutility.api.event.VanishStateChangeEvent;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.PluginManager;
 
 import java.util.Objects;
 import java.util.Set;
@@ -20,14 +22,22 @@ public final class VanishService {
     private final Supplier<UtilityConfig> config;
     private final AdminDataStore data;
     private final AdminAuditService audit;
+    private final SyntheticPresenceBridge syntheticPresence;
     private final Set<UUID> vanished = ConcurrentHashMap.newKeySet();
 
-    public VanishService(Plugin plugin, Supplier<UtilityConfig> config, AdminDataStore data, AdminAuditService audit) {
+    public VanishService(Plugin plugin, Supplier<UtilityConfig> config, AdminDataStore data,
+                         AdminAuditService audit, SyntheticPresenceBridge syntheticPresence) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.config = Objects.requireNonNull(config, "config");
         this.data = Objects.requireNonNull(data, "data");
         this.audit = Objects.requireNonNull(audit, "audit");
+        this.syntheticPresence = syntheticPresence;
         if (config.get().admin().vanish().persist()) vanished.addAll(data.snapshot().vanished());
+    }
+
+    /** Compatibility constructor retained for existing tests/integrations. */
+    public VanishService(Plugin plugin, Supplier<UtilityConfig> config, AdminDataStore data, AdminAuditService audit) {
+        this(plugin, config, data, audit, null);
     }
 
     public boolean isVanished(UUID playerId) {
@@ -44,7 +54,16 @@ public final class VanishService {
         boolean changed = value ? vanished.add(id) : vanished.remove(id);
         if (changed && config.get().admin().vanish().persist()) data.setVanished(id, value);
         applyTarget(target);
-        if (changed) audit.log(value ? "VANISH_ON" : "VANISH_OFF", actor, target, "state=" + value);
+        if (!changed) return value;
+
+        UtilityConfig.SyntheticPresenceConfig policy = config.get().admin().vanish().syntheticPresence();
+        boolean syntheticRequested = policy.enabled();
+        SyntheticPresenceBridge.BroadcastResult result = syntheticPresence == null || !syntheticRequested
+                ? new SyntheticPresenceBridge.BroadcastResult(0, syntheticRequested ? "bridge-unavailable" : "disabled")
+                : syntheticPresence.broadcast(target, value);
+        audit.log(value ? "VANISH_ON" : "VANISH_OFF", actor, target,
+                "state=" + value + " syntheticAudience=" + result.recipients() + " syntheticMode=" + result.mode());
+        fireStateChange(target, value, actor, syntheticRequested);
         return value;
     }
 
@@ -64,6 +83,11 @@ public final class VanishService {
         }
         if (admin.vanish().persist()) vanished.addAll(data.snapshot().vanished());
         for (Player viewer : Bukkit.getOnlinePlayers()) applyAllToViewer(viewer);
+    }
+
+    public String syntheticPresenceMode() {
+        if (syntheticPresence == null) return "bridge-unavailable";
+        return syntheticPresence.mode();
     }
 
     public void applyAllToViewer(Player viewer) {
@@ -87,6 +111,16 @@ public final class VanishService {
         }
         viewer.hidePlayer(plugin, target);
         viewer.unlistPlayer(target);
+    }
+
+    private void fireStateChange(Player target, boolean value, CommandSender actor, boolean syntheticRequested) {
+        PluginManager manager;
+        try {
+            manager = Bukkit.getPluginManager();
+        } catch (RuntimeException exception) {
+            return;
+        }
+        if (manager != null) manager.callEvent(new VanishStateChangeEvent(target, value, actor, syntheticRequested));
     }
 
     public void restoreOwnedVisibility() {

@@ -1,41 +1,54 @@
-# Essentials Feature Audit — PlexonUtility 1.0.0
+# Essentials Feature Audit — PlexonUtility 3.5.0
 
-> **Superseding note — 2026-09-12 / PlexonUtility 3.3.0:** the historical 1.0 decision below that all moderation remain external is superseded only for the focused native 3.3 admin toolkit: self-vanish, kick, native profile ban/unban, read-only inventory inspection, one prison/holding waypoint, and selected lightweight player-management actions. Broad moderation history, mute, social spy, freeze, IP bans, appeals, cross-server moderation, rank/economy editing, nicknames, kits/mail, and specialist ownership remain external. See `docs/ADMIN_TOOLKIT_3.3_MIGRATION.md` and `releases/3.3.0.md`.
+> **3.5.0 update — 2026-09-12:** PlexonUtility now intentionally absorbs the useful low-overlap administration/utility surface listed below. This supersedes older `DEFERRED` decisions for `/anvil`, `/fly`, `/god`, `/speed`, `/clearinventory`, `/gamemode`, bounded entity cleanup, and bounded entity spawning. It does **not** change specialist Plexon Family ownership.
 
-This document otherwise preserves the original 1.0 repository audit as historical evidence. It does **not** claim access to the live PlexonCraft plugin directory, command map, Vault provider, player data, or production configuration.
+This repository audit does not by itself prove that Essentials is removable from the live PlexonCraft host. Live command ownership, dependent plugins, economy provider/data, kits/mail/nicknames, and staging behavior still require evidence.
 
-| Feature | 1.0 owner/status | Production evidence | Historical action |
-| --- | --- | --- | --- |
-| `/feed` | PlexonUtility — IMPLEMENTED | Specification identifies as required default utility candidate | Stage command ownership before Essentials removal |
-| `/heal` | PlexonUtility — IMPLEMENTED | Specification identifies as required default utility candidate | Stage command ownership before Essentials removal |
-| `/enderchest`, `/ec` | PlexonUtility — IMPLEMENTED | Specification identifies as required default utility candidate | Online targets only; stage ownership |
-| `/workbench` | PlexonUtility — IMPLEMENTED | Specification identifies as required default utility candidate | Stage ownership |
-| `/anvil` | DEFERRED | No production-use evidence | Keep disabled/external |
-| `/hat` | DEFERRED | No production-use evidence | Keep disabled/external |
-| `/trash` | DEFERRED | No production-use evidence | Keep disabled/external |
-| `/afk` | DEFERRED | No production consumer/dependency evidence | Do not run a second authoritative AFK engine |
-| `/repair` | PlexonBlacksmith / external | Explicitly excluded by architecture | Do not implement in Utility |
-| `/fly`, `/god`, `/speed` | DEFERRED / external admin tooling | No production-use evidence | Do not implement for parity alone |
-| `/nick` | Identity/chat owner unresolved | Production identity integrations not audited | Blocks Essentials removal if actively used |
-| `/msg`, `/r`, `/socialspy` | PlexonChats/future messaging owner | Communication responsibility | Not Utility |
-| Kits | Dedicated future owner/external | Production use not audited | Blocks Essentials removal if active |
-| Mail | Dedicated future owner/external | Production use not audited | Blocks Essentials removal if active |
-| `/spawn`, `/hub`, `/back`, `/warp`, `/tpa` | PlexonTravel | Separate module responsibility | Validate PlexonTravel PRIMARY before removal |
-| `/home`, `/sethome` | PlexonHomes | Separate module responsibility | Validate PlexonHomes PRIMARY before removal |
-| Economy/Vault provider | NOT UTILITY | Production provider unknown | **Critical blocker until audited** |
-| Moderation | Dedicated moderation provider | Production usage unknown | **Historical 1.0 decision; superseded only by the bounded 3.3 native set described above** |
+| Responsibility | 3.5.0 owner/status | Boundary / evidence |
+| --- | --- | --- |
+| `/feed` | PlexonUtility — REPLACED | Existing native Utility command |
+| `/heal` | PlexonUtility — REPLACED | Existing native Utility command |
+| `/enderchest`, `/ec` | PlexonUtility — REPLACED | Existing native Utility command; online targets |
+| `/workbench` | PlexonUtility — REPLACED | Existing native Utility command |
+| `/anvil` | PlexonUtility — REPLACED in 3.5 | Native Paper anvil UI; vanilla rules/costs remain authoritative |
+| `/trash` | PlexonUtility — REPLACED | Writable disposable Utility inventory |
+| `/afk` | PlexonUtility — REPLACED | One shared event-driven/bounded AFK engine |
+| `/gamemode` | PlexonUtility — REPLACED in 3.5 | Self/other permission split and audit |
+| `/fly` | PlexonUtility — REPLACED in 3.5 | Utility-owned Survival/Adventure flight; does not disable Creative/Spectator authority |
+| `/god` | PlexonUtility — REPLACED in 3.5 | Event cancellation, no health polling; restart-ephemeral in 3.5 |
+| `/speed` | PlexonUtility — REPLACED in 3.5 | Validated 1–10/reset mapping to Bukkit speed bounds |
+| `/clearinventory`, `/ci`, `/clearinv` | PlexonUtility — REPLACED in 3.5 | Full storage + armor + offhand clear with aggregate audit |
+| Entity cleanup (`/killall`) | PlexonUtility — REPLACED in 3.5 | Bounded selectors/radius, conservative protections, confirmation threshold, players never valid targets |
+| Entity spawning | PlexonUtility — REPLACED in 3.5 as `/spawnmob` | Hard cap 100; safe loaded-location search; **does not take `/spawn`** |
+| Self vanish | PlexonUtility — REPLACED | Native visibility/list state plus 3.5 synthetic presentation on real transitions only |
+| Kick/profile ban/unban | PlexonUtility — REPLACED | Focused native moderation, no private punishment-history system |
+| Online inventory inspection/edit | PlexonUtility — REPLACED | 3.4 live editor with separate edit permission |
+| Prison holding waypoint | PlexonUtility — REPLACED | Single holding location, not a jail/sentence subsystem |
+| `/repair` | PlexonBlacksmith — KEEP EXTERNAL | Specialist item-repair owner |
+| `/msg`, `/r`, social spy/chat formatting | PlexonChats — KEEP EXTERNAL | Communication owner |
+| `/spawn`, `/hub`, `/back`, `/warp`, `/warps`, `/rtp`, TPA family | PlexonTravel — KEEP EXTERNAL | Travel/destination owner. `/spawn` remains PlexonTravel; entity creation is `/spawnmob` |
+| `/home`, `/sethome`, `/delhome`, home limits | PlexonHomes — KEEP EXTERNAL | Home/data/teleport owner |
+| Rank editing | PlexonRanks / rank system — KEEP EXTERNAL | Not Utility |
+| Economy editing/provider | Economy owner — KEEP EXTERNAL / LIVE AUDIT REQUIRED | Preserve balances/provider; Utility does not edit economy |
+| Kits | Dedicated/external owner — LIVE AUDIT REQUIRED | Utility does not absorb kit storage/claims |
+| Mail | Dedicated/external owner — LIVE AUDIT REQUIRED | Utility does not absorb mail |
+| Nicknames | Identity/chat owner — LIVE AUDIT REQUIRED | Utility does not own nicknames |
+| Claims, crates, jobs, skills, quests, keys | Specialist Plexon plugins — KEEP EXTERNAL | Explicit family ownership |
+| Freeze, mute, IP bans, punishment history, appeals, cross-server moderation | Dedicated moderation system — KEEP EXTERNAL | Intentionally outside 3.5 scope |
 
-## Required production follow-up
+## Synthetic vanish / PlexonChats boundary
 
-Before uninstalling or disabling Essentials on the live server:
+PlexonUtility remains the vanish-state authority. PlexonChats remains the desired connection-message formatting authority. At the 3.5.0 implementation point, the current public `PlexonChatsAPI` has no synthetic join/quit renderer or audience-aware broadcaster, so Utility uses a configurable PlexonCore/MiniMessage fallback. It does not dispatch fake Bukkit lifecycle events and does not compile against PlexonChats internals.
 
-1. Inspect Bukkit/Paper command ownership and aliases.
-2. Inspect installed plugin metadata for `depend`/`softdepend` on Essentials and any Essentials API usage.
-3. Identify the active Vault economy provider and balance storage.
-4. Audit active Essentials kits, mail, nicknames, moderation usage, and any custom MyCommand aliases.
-5. Validate PlexonHomes and PlexonTravel in PRIMARY mode.
-6. For native 3.3 vanish, decide one authoritative vanish engine and migrate TAB/PlexonChats presentation rules before removing the previous provider.
-7. Run a staging boot with Essentials physically disabled/removed.
-8. Compare balances and critical plugin behavior, then run a soak/performance profile.
+## Required production follow-up before Essentials removal
 
-Until those steps have evidence, full Essentials decommission remains **BLOCKED**.
+1. Inspect the live Paper command map and verify each Essentials-owned command still used by players/staff has an intentional replacement or retirement decision.
+2. Inspect installed plugins for hard/soft Essentials API dependencies.
+3. Identify and preserve the active economy/Vault provider and balances.
+4. Audit any still-active Essentials kits, mail, nicknames, homes/warps data, moderation data, and custom command aliases.
+5. Confirm PlexonTravel PRIMARY for travel commands and PlexonHomes PRIMARY for home commands.
+6. Confirm PlexonUtility is the single active vanish authority and that TAB/chat presentation does not expose vanished staff.
+7. Run the full PlexonUtility 3.5 Paper 26.2 runtime smoke test, including protected cleanup entities, `/spawnmob zombie 100`, and three-audience vanish behavior.
+8. Boot staging with Essentials physically disabled/removed and run a soak/performance check.
+
+`Essentials fully decommissioned? NO — BLOCKED pending live dependency/data/runtime evidence.`

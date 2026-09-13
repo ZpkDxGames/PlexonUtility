@@ -11,12 +11,11 @@ public interface PlexonUtilityAPI {
     Set<Feature> enabledFeatures();
 
     /** Returns the current ephemeral AFK state for an online/tracked player. */
-    default boolean isAfk(UUID playerId) {
-        return false;
-    }
+    default boolean isAfk(UUID playerId) { return false; }
 
-    /** Returns the current native PlexonUtility vanish state when the 3.3+ admin toolkit is active. */
-    default boolean isVanished(UUID playerId) {
-        return false;
-    }
+    /** Returns the current native PlexonUtility vanish state when the admin toolkit is active. */
+    default boolean isVanished(UUID playerId) { return false; }
+
+    /** Returns the current restart-ephemeral god-mode state for an online/tracked player. */
+    default boolean isGodMode(UUID playerId) { return false; }
 }

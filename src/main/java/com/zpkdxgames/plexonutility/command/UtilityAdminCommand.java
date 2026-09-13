@@ -2,7 +2,6 @@ package com.zpkdxgames.plexonutility.command;
 
 import com.zpkdxgames.plexoncore.api.PlexonCoreAPI;
 import com.zpkdxgames.plexonutility.PlexonUtilityPlugin;
-import com.zpkdxgames.plexonutility.admin.gui.AdminMenuService;
 import com.zpkdxgames.plexonutility.afk.AfkManager;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.cooldown.CooldownService;
@@ -17,6 +16,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
+import java.util.function.Consumer;
 
 public final class UtilityAdminCommand implements CommandExecutor {
     private final PlexonUtilityPlugin plugin;
@@ -25,18 +25,18 @@ public final class UtilityAdminCommand implements CommandExecutor {
     private final AfkManager afk;
     private final ComplementService complements;
     private final FamilyCompatibilityService family;
-    private final AdminMenuService adminMenu;
+    private final Consumer<Player> adminOpener;
 
     public UtilityAdminCommand(PlexonUtilityPlugin plugin, CooldownService cooldowns, MessageService messages,
                                AfkManager afk, ComplementService complements, FamilyCompatibilityService family,
-                               AdminMenuService adminMenu) {
+                               Consumer<Player> adminOpener) {
         this.plugin = plugin;
         this.cooldowns = cooldowns;
         this.messages = messages;
         this.afk = afk;
         this.complements = complements;
         this.family = family;
-        this.adminMenu = adminMenu;
+        this.adminOpener = adminOpener;
     }
 
     @Override
@@ -51,7 +51,7 @@ public final class UtilityAdminCommand implements CommandExecutor {
                     messages.send(player, "no-permission");
                     return true;
                 }
-                adminMenu.open(player);
+                adminOpener.accept(player);
             } else {
                 diagnostics(sender);
             }
@@ -110,6 +110,10 @@ public final class UtilityAdminCommand implements CommandExecutor {
         messages.sendRaw(sender, "<gray>Admin toolkit:</gray> <white><state></white>", Map.of("state", cfg.admin().enabled() ? "ENABLED" : "DISABLED"));
         messages.sendRaw(sender, "<gray>Native vanish:</gray> <white><state></white> <dark_gray>•</dark_gray> <gray>persist:</gray> <white><persist></white>", Map.of(
                 "state", cfg.admin().vanish().enabled() ? "ENABLED" : "DISABLED", "persist", cfg.admin().vanish().persist()));
+        messages.sendRaw(sender, "<gray>Entity management:</gray> <white><state></white>", Map.of(
+                "state", cfg.admin().entityManagement().enabled() ? "ENABLED" : "DISABLED"));
+        messages.sendRaw(sender, "<gray>Player management:</gray> <white><state></white>", Map.of(
+                "state", playerManagementState(cfg.admin().playerManagement())));
         messages.sendRaw(sender, "<gray>Prison waypoint:</gray> <white><state></white>", Map.of("state", cfg.admin().prisonEnabled() ? "ENABLED" : "DISABLED"));
         messages.sendRaw(sender, "<gray>Cooldown players:</gray> <white><count></white>", Map.of("count", cooldowns.trackedPlayers()));
         messages.sendRaw(sender, "<gray>AFK tracked/afk:</gray> <white><tracked>/<afk></white>", Map.of("tracked", afk.trackedPlayers(), "afk", afk.afkPlayers()));
@@ -119,6 +123,7 @@ public final class UtilityAdminCommand implements CommandExecutor {
                 "state", cfg.feedback().afkBossbarEnabled() ? "ENABLED" : "DISABLED", "color", cfg.feedback().afkBossbarColor(), "overlay", cfg.feedback().afkBossbarOverlay()));
         messages.sendRaw(sender, "<gray>Quiet self success:</gray> <white><state></white>", Map.of("state", cfg.feedback().utilitySuccessActionbar() ? "ACTIONBAR" : "CHAT"));
         messages.sendRaw(sender, "<gray>AFK state persistence:</gray> <white>EPHEMERAL</white>");
+        messages.sendRaw(sender, "<gray>God state persistence:</gray> <white>EPHEMERAL</white>");
         messages.sendRaw(sender, "<gray>PlaceholderAPI:</gray> <white><state></white>", Map.of("state", plugin.placeholderRegistered() ? "REGISTERED" : "UNAVAILABLE"));
         messages.sendRaw(sender, "<gray>PlexonFamily integrations:</gray> <white><ready>/<total></white>", Map.of("ready", family.readyCount(), "total", family.totalCount()));
         messages.sendRaw(sender, "<gray>PlexonHomes:</gray> <white><state></white>", Map.of("state", family.ready("PLEXON_HOMES") ? "READY" : "MISSING"));
@@ -128,6 +133,11 @@ public final class UtilityAdminCommand implements CommandExecutor {
             messages.sendRaw(sender, "<gray>Core GUI sessions:</gray> <white><sessions></white>", Map.of("sessions", core.gui().activeSessions()));
             messages.sendRaw(sender, "<gray>Core compute/IO queues:</gray> <white><compute>/<io></white>", Map.of("compute", core.scheduler().computeQueueSize(), "io", core.scheduler().ioQueueSize()));
         }
+    }
+
+    private static String playerManagementState(UtilityConfig.PlayerManagementConfig policy) {
+        return policy.gamemodeEnabled() || policy.flyEnabled() || policy.godEnabled() || policy.speedEnabled()
+                || policy.clearInventoryEnabled() || policy.anvilEnabled() ? "ENABLED" : "DISABLED";
     }
 
     private void integrations(CommandSender sender) {
