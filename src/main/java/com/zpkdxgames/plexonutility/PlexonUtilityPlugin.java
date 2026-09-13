@@ -5,6 +5,7 @@ import com.zpkdxgames.plexonutility.admin.AdminAuditService;
 import com.zpkdxgames.plexonutility.admin.AdminDataStore;
 import com.zpkdxgames.plexonutility.admin.entity.EntityCleanupService;
 import com.zpkdxgames.plexonutility.admin.entity.EntitySpawnService;
+import com.zpkdxgames.plexonutility.admin.gui.Admin350MenuService;
 import com.zpkdxgames.plexonutility.admin.gui.AdminMenuService;
 import com.zpkdxgames.plexonutility.admin.inventory.InventoryInspectionService;
 import com.zpkdxgames.plexonutility.admin.moderation.ModerationService;
@@ -117,7 +118,10 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             AdminMenuService adminMenu = new AdminMenuService(
                     this, this::utilityConfig, messages, core.gui(), core.scheduler(), utilityMenu.itemFactory(),
                     utilityMenu, afkManager, vanishService, moderation, prison, inventory, playerUtilities);
-            utilityMenu.setAdminCenterOpener(adminMenu::open);
+            Admin350MenuService admin350Menu = new Admin350MenuService(
+                    this::utilityConfig, messages, core.gui(), core.scheduler(), utilityMenu.itemFactory(), adminMenu,
+                    entityCleanup, entitySpawn, playerManagement, inventory);
+            utilityMenu.setAdminCenterOpener(admin350Menu::open);
 
             AdminActionCommand adminActions = new AdminActionCommand(
                     this::utilityConfig, messages, inventory, vanishService, moderation, prison);
@@ -141,7 +145,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             bind("anvil", playerCommands);
 
             command("utilityadmin").setExecutor(
-                    new UtilityAdminCommand(this, cooldowns, messages, afkManager, complements, family, adminMenu));
+                    new UtilityAdminCommand(this, cooldowns, messages, afkManager, complements, family, admin350Menu::open));
 
             getServer().getPluginManager().registerEvents(this, this);
             getServer().getPluginManager().registerEvents(afkManager, this);
