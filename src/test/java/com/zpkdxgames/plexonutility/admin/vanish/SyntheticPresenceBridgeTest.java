@@ -17,6 +17,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -33,7 +34,7 @@ class SyntheticPresenceBridgeTest {
         Player ordinary = player("Ordinary");
         Player staff = player("SeniorStaff");
         when(staff.hasPermission("plexonutility.admin.vanish.see")).thenReturn(true);
-        when(server.getOnlinePlayers()).thenReturn(List.of(actor, ordinary, staff));
+        doReturn(List.of(actor, ordinary, staff)).when(server).getOnlinePlayers();
         TextService text = mock(TextService.class);
         Component rendered = Component.text("left");
         when(text.renderTemplate(anyString(), anyMap())).thenReturn(rendered);
@@ -59,7 +60,7 @@ class SyntheticPresenceBridgeTest {
         Player actor = player("HiddenStaff");
         Player staff = player("SeniorStaff");
         when(staff.hasPermission("plexonutility.admin.vanish.see")).thenReturn(true);
-        when(server.getOnlinePlayers()).thenReturn(List.of(actor, staff));
+        doReturn(List.of(actor, staff)).when(server).getOnlinePlayers();
         TextService text = mock(TextService.class);
         Component rendered = Component.text("left");
         when(text.renderTemplate(anyString(), anyMap())).thenReturn(rendered);
