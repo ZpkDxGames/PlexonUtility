@@ -82,11 +82,13 @@ jobs:
             'com/zpkdxgames/plexonutility/admin/entity/EntitySelector.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntityCleanupService.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntitySpawnService.class' \
+            'com/zpkdxgames/plexonutility/admin/gui/Admin350MenuService.class' \
             'com/zpkdxgames/plexonutility/admin/player/PlayerManagementService.class' \
             'com/zpkdxgames/plexonutility/admin/vanish/SyntheticPresenceBridge.class' \
             'com/zpkdxgames/plexonutility/admin/vanish/VanishService.class' \
             'com/zpkdxgames/plexonutility/command/EntityAdminCommand.class' \
             'com/zpkdxgames/plexonutility/command/PlayerAdminCommand.class' \
+            'com/zpkdxgames/plexonutility/command/TimedConfirmationStore.class' \
             'com/zpkdxgames/plexonutility/admin/inventory/InventoryInspectionService.class'; do
             grep -qx "$class" target/jar-contents.txt
           done
