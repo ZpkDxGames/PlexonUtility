@@ -7,5 +7,23 @@ candidate_jar_sha256=PENDING
 implementation_commit=PENDING
 certified_at=PENDING
 environment=PENDING
+
+startup_and_plugin_list=PENDING
+duplicate_command_warnings=PENDING
+afk_matrix=PENDING
+rank_permission_matrix=PENDING
+flight_lifecycle_matrix=PENDING
+reload_generation_matrix=PENDING
+killall_matrix=PENDING
+wildstacker_matrix=PENDING
+spawnmob_matrix=PENDING
+clearinventory_matrix=PENDING
+admin_data_persistence_matrix=PENDING
+prison_matrix=PENDING
+vanish_presentation_matrix=PENDING
+invsee_regression_matrix=PENDING
+spark_result=PENDING
 spark_evidence=PENDING
-notes=Runtime certification has not yet been executed against the exact final PlexonUtility 3.5.0 candidate. Stable publication must remain blocked until this file is replaced with real PASS evidence bound to the candidate JAR SHA-256.
+essentials_decommission=PENDING
+
+notes=Runtime certification has not yet been executed against the exact final PlexonUtility 3.5.0 candidate. Stable publication must remain blocked until every required matrix line is real evidence and this file is replaced with PASS results bound to the candidate JAR SHA-256.
