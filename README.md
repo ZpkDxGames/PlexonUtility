@@ -159,7 +159,7 @@ mvn -B -ntp clean verify
 
 Distribution verification checks Java class major 69, Paper 26.2 metadata, required public/admin classes, WildStacker optional integration, provided-API isolation, all discovered tests, and confirms PlexonUtility does not register root `/spawn`.
 
-Stable publication remains intentionally blocked until real staging evidence exists in `releases/3.5.0-runtime-smoke.txt` with:
+Stable publication remains intentionally blocked until the full live matrix in `docs/RUNTIME_CERTIFICATION_3.5.0.md` passes and real staging evidence exists in `releases/3.5.0-runtime-smoke.txt` with:
 
 ```text
 result=PASS
