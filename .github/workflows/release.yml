@@ -84,7 +84,20 @@ jobs:
             spark_result; do
             grep -Fx "${gate}=PASS" "$evidence"
           done
-          grep -Eq '^spark_evidence=.+          test -n "$candidate_hash"
+          grep -Eq '^spark_evidence=.+$' "$evidence"
+          ! grep -Fx 'spark_evidence=PENDING' "$evidence"
+          grep -Eq '^essentials_decommission=(READY|BLOCKED_DOCUMENTED)$' "$evidence"
+          implementation_commit="$(sed -n 's/^implementation_commit=//p' "$evidence")"
+          test -n "$implementation_commit"
+          test "$implementation_commit" != 'PENDING'
+          git cat-file -e "${implementation_commit}^{commit}"
+          git merge-base --is-ancestor "$implementation_commit" "${{ steps.source.outputs.sha }}"
+          changed_after_candidate="$(git diff --name-only "$implementation_commit" "${{ steps.source.outputs.sha }}")"
+          test "$changed_after_candidate" = "$evidence"
+          grep -Eq '^certified_at=[0-9]{4}-[0-9]{2}-[0-9]{2}T' "$evidence"
+          ! grep -Fx 'environment=PENDING' "$evidence"
+          candidate_hash="$(sed -n 's/^candidate_jar_sha256=//p' "$evidence")"
+          test -n "$candidate_hash"
           test "$candidate_hash" != 'PENDING'
           echo "candidate_hash=$candidate_hash" >> "$GITHUB_ENV"
           test -z "$(git ls-remote --tags origin "refs/tags/v${version}" || true)"
