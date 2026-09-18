@@ -16,6 +16,7 @@ import com.zpkdxgames.plexonutility.admin.vanish.VanishListener;
 import com.zpkdxgames.plexonutility.admin.vanish.VanishService;
 import com.zpkdxgames.plexonutility.afk.AfkManager;
 import com.zpkdxgames.plexonutility.afk.AfkTracker;
+import com.zpkdxgames.plexonutility.api.AfkState;
 import com.zpkdxgames.plexonutility.api.PlexonUtilityAPI;
 import com.zpkdxgames.plexonutility.command.AdminActionCommand;
 import com.zpkdxgames.plexonutility.command.AfkCommand;
@@ -279,6 +280,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         @Override public boolean isEnabled(Feature feature) { return utilityConfig.enabled(feature); }
         @Override public Set<Feature> enabledFeatures() { return utilityConfig.enabledFeatures(); }
         @Override public boolean isAfk(UUID playerId) { return afkManager != null && afkManager.isAfk(playerId); }
+        @Override public AfkState afkState(UUID playerId) { return afkManager == null ? AfkState.untracked() : afkManager.afkState(playerId); }
         @Override public boolean isVanished(UUID playerId) { return vanishService != null && vanishService.isVanished(playerId); }
         @Override public boolean isGodMode(UUID playerId) { return playerManagement != null && playerManagement.isGodMode(playerId); }
     }
