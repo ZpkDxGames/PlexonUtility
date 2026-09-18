@@ -135,7 +135,7 @@ public final class AfkManager implements Listener, AutoCloseable {
 
     private void asyncActivity(Player player) {
         if (!config.get().enabled(Feature.AFK)) return;
-        coreScheduler.runPrimary(() -> {
+        coreScheduler.runPrimary(plugin, () -> {
             if (plugin.isEnabled() && player.isOnline()) {
                 activity(player);
             }
