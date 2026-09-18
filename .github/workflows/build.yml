@@ -123,6 +123,32 @@ jobs:
           (cd target && sha256sum "PlexonUtility-${VERSION}.jar" > SHA256SUMS.txt && sha256sum --check SHA256SUMS.txt)
           git diff --check
 
+      - name: Syntax-check stable release verification shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          source = Path(".github/workflows/release.yml").read_text(encoding="utf-8").splitlines()
+          marker = "      - name: Verify stable release and runtime boundaries"
+          start = source.index(marker)
+          run_line = next(i for i in range(start, len(source)) if source[i] == "        run: |")
+          body = []
+          for line in source[run_line + 1:]:
+              if line.startswith("      - name: "):
+                  break
+              if line.startswith("          "):
+                  body.append(line[10:])
+              elif line:
+                  raise SystemExit(f"Unexpected release-shell indentation: {line!r}")
+          script = "\n".join(body) + "\n"
+          script = re.sub(r"\$\{\{[^}]+\}\}", "deadbeef", script)
+          Path("target/release-gate-syntax.sh").write_text(script, encoding="utf-8")
+          PY
+          bash -n target/release-gate-syntax.sh
+
       - name: Upload verified artifact
         uses: actions/upload-artifact@v4
         with:
