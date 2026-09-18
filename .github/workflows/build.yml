@@ -24,20 +24,20 @@ jobs:
           java-version: '25'
           cache: maven
 
-      - name: Provision immutable PlexonCore 2.0.5
+      - name: Provision immutable PlexonCore 2.1.0
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${RUNNER_TEMP}/PlexonCore-2.0.5.jar"
+          core_jar="${RUNNER_TEMP}/PlexonCore-2.1.0.jar"
           curl --fail --location --silent --show-error \
             --output "$core_jar" \
-            "https://github.com/ZpkDxGames/PlexonCore/releases/download/v2.0.5/PlexonCore-2.0.5.jar"
-          echo "bf4df796e83571e76c06b296c75c5e73ddc8053cb2c587d74c08cd3922e0b4d4  $core_jar" | sha256sum --check
+            "https://github.com/ZpkDxGames/PlexonCore/releases/download/v2.0.5/PlexonCore-2.1.0.jar"
+          echo "7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c  $core_jar" | sha256sum --check
           mvn -B -ntp org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
             -Dfile="$core_jar" \
             -DgroupId=com.zpkdxgames \
             -DartifactId=PlexonCore \
-            -Dversion=2.0.5 \
+            -Dversion=2.1.0 \
             -Dpackaging=jar \
             -DgeneratePom=true
 
@@ -77,6 +77,7 @@ jobs:
           for class in \
             'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' \
             'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' \
+            'com/zpkdxgames/plexonutility/api/AfkState.class' \
             'com/zpkdxgames/plexonutility/api/event/AfkStateChangeEvent.class' \
             'com/zpkdxgames/plexonutility/api/event/VanishStateChangeEvent.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntitySelector.class' \
