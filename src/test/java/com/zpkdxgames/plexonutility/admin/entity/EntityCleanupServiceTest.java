@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -83,6 +84,27 @@ class EntityCleanupServiceTest {
         verify(wither).remove();
     }
 
+    @Test void confirmedPlanNeverExpandsToEntitiesSpawnedAfterPreview() {
+        World world = mock(World.class);
+        when(world.getName()).thenReturn("Survival_World");
+        Monster planned = mock(Monster.class);
+        entity(planned, EntityType.ZOMBIE);
+        Monster late = mock(Monster.class);
+        entity(late, EntityType.ZOMBIE);
+
+        when(world.getEntities()).thenReturn(List.of(planned), List.of(planned, late));
+
+        EntityCleanupService service = service();
+        EntityCleanupService.Query query = new EntityCleanupService.Query(EntitySelector.parse("zombie"), world, null, null);
+        EntityCleanupService.Plan plan = service.plan(query);
+        EntityCleanupService.Result result = service.execute(mock(Player.class), plan);
+
+        assertEquals(1, plan.candidateIds().size());
+        assertEquals(1, result.removed());
+        verify(planned).remove();
+        verify(late, never()).remove();
+    }
+
     @Test void radiusUsesSphericalFilteringInsideConfiguredWorld() {
         World world = mock(World.class);
         when(world.getName()).thenReturn("Survival_World");
@@ -111,6 +133,7 @@ class EntityCleanupServiceTest {
 
     private static void entity(Entity entity, EntityType type) {
         when(entity.getType()).thenReturn(type);
+        when(entity.getUniqueId()).thenReturn(UUID.randomUUID());
         when(entity.getScoreboardTags()).thenReturn(Set.of());
     }
 }
