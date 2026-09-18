@@ -52,19 +52,43 @@ public final class VanishService {
         Objects.requireNonNull(target, "target");
         UUID id = target.getUniqueId();
         boolean changed = value ? vanished.add(id) : vanished.remove(id);
-        if (changed && config.get().admin().vanish().persist()) data.setVanished(id, value);
         applyTarget(target);
         if (!changed) return value;
 
+        if (config.get().admin().vanish().persist()) observePersistence(data.setVanished(id, value), id, value);
+
         UtilityConfig.SyntheticPresenceConfig policy = config.get().admin().vanish().syntheticPresence();
         boolean syntheticRequested = policy.enabled();
+
+        // Public state authority is emitted first. Presentation is a separate request and never a
+        // fake Bukkit PlayerJoinEvent/PlayerQuitEvent.
+        fireStateChange(target, value, actor, syntheticRequested);
         SyntheticPresenceBridge.BroadcastResult result = syntheticPresence == null || !syntheticRequested
                 ? new SyntheticPresenceBridge.BroadcastResult(0, syntheticRequested ? "bridge-unavailable" : "disabled")
                 : syntheticPresence.broadcast(target, value);
+
         audit.log(value ? "VANISH_ON" : "VANISH_OFF", actor, target,
                 "state=" + value + " syntheticAudience=" + result.recipients() + " syntheticMode=" + result.mode());
-        fireStateChange(target, value, actor, syntheticRequested);
         return value;
+    }
+
+    private void observePersistence(java.util.concurrent.CompletableFuture<AdminDataStore.PersistenceResult> persistence,
+                                    UUID playerId, boolean value) {
+        if (persistence == null) return;
+        persistence.whenComplete((result, error) -> {
+            boolean durable = error == null && result != null && result.durable();
+            if (durable || plugin.getLogger() == null) return;
+            String detail;
+            if (error != null) {
+                Throwable root = error;
+                while (root.getCause() != null) root = root.getCause();
+                detail = root.getMessage() == null ? root.getClass().getSimpleName() : root.getMessage();
+            } else {
+                detail = result == null ? "missing persistence result" : result.detail();
+            }
+            plugin.getLogger().severe("Vanish state for " + playerId + " changed to " + value
+                    + " in runtime but was not durably persisted: " + detail);
+        });
     }
 
     public void onJoin(Player player) {
