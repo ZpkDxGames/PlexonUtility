@@ -65,10 +65,12 @@ public final class EntityCleanupService {
     public Plan plan(Query query) {
         int matched = 0;
         int protectedCount = 0;
+        int maxCandidates = config.get().admin().entityManagement().killall().maxCandidates();
         Set<UUID> removable = new java.util.LinkedHashSet<>();
         for (Entity entity : candidates(query)) {
             if (!EntitySelector.matches(query.selection(), entity)) continue;
             matched++;
+            if (matched > maxCandidates) throw new PlanLimitExceededException(maxCandidates, matched);
             if (isProtected(query.selection(), entity)) {
                 protectedCount++;
             } else {
@@ -313,6 +315,20 @@ public final class EntityCleanupService {
             this.plan = plan;
             this.ids = ids;
         }
+    }
+
+    public static final class PlanLimitExceededException extends IllegalArgumentException {
+        private final int limit;
+        private final int observed;
+
+        public PlanLimitExceededException(int limit, int observed) {
+            super("cleanup candidate plan exceeded limit " + limit);
+            this.limit = limit;
+            this.observed = observed;
+        }
+
+        public int limit() { return limit; }
+        public int observed() { return observed; }
     }
 
     public record Result(int matched, int protectedCount, int removed, int logicalRemoved) {
