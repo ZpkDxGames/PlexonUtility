@@ -38,6 +38,7 @@ public final class EntityCleanupService {
     private final CoreScheduler scheduler;
     private final Supplier<UtilityConfig> config;
     private final AdminAuditService audit;
+    private final WildStackerAdapter wildStacker;
 
     public EntityCleanupService(JavaPlugin plugin, CoreScheduler scheduler,
                                 Supplier<UtilityConfig> config, AdminAuditService audit) {
@@ -45,6 +46,7 @@ public final class EntityCleanupService {
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.config = Objects.requireNonNull(config, "config");
         this.audit = Objects.requireNonNull(audit, "audit");
+        this.wildStacker = new WildStackerAdapter(plugin);
     }
 
     /** Compatibility constructor for unit tests/source callers. */
@@ -53,6 +55,7 @@ public final class EntityCleanupService {
         this.scheduler = null;
         this.config = Objects.requireNonNull(config, "config");
         this.audit = Objects.requireNonNull(audit, "audit");
+        this.wildStacker = new WildStackerAdapter(null);
     }
 
     public Preview preview(Query query) {
@@ -79,6 +82,7 @@ public final class EntityCleanupService {
         int matched = 0;
         int protectedCount = 0;
         int removed = 0;
+        int logicalRemoved = 0;
         for (Entity entity : candidates(query)) {
             if (!EntitySelector.matches(query.selection(), entity)) continue;
             matched++;
@@ -86,17 +90,24 @@ public final class EntityCleanupService {
                 protectedCount++;
                 continue;
             }
-            entity.remove();
+            WildStackerAdapter.Removal removal = removeEntity(entity);
+            if (!removal.removed()) {
+                protectedCount++;
+                continue;
+            }
             removed++;
+            logicalRemoved += removal.logicalAmount();
         }
         audit.log("KILLALL", actor,
                 "selector=" + query.selection().canonical()
                         + " world=" + query.world().getName()
                         + " scope=" + query.scopeDescription()
-                        + " removed=" + removed
+                        + " representativesRemoved=" + removed
+                        + " logicalRemoved=" + logicalRemoved
                         + " protected=" + protectedCount
-                        + " matched=" + matched);
-        return new Result(matched, protectedCount, removed);
+                        + " matched=" + matched
+                        + " wildStacker=" + wildStacker.active());
+        return new Result(matched, protectedCount, removed, logicalRemoved);
     }
 
     /**
@@ -106,6 +117,7 @@ public final class EntityCleanupService {
     public Result execute(CommandSender actor, Plan plan) {
         Query query = plan.query();
         int removed = 0;
+        int logicalRemoved = 0;
         int newlyProtected = 0;
         Set<UUID> remaining = new java.util.HashSet<>(plan.candidateIds());
         for (Entity entity : candidates(query)) {
@@ -114,8 +126,13 @@ public final class EntityCleanupService {
                 newlyProtected++;
                 continue;
             }
-            entity.remove();
+            WildStackerAdapter.Removal removal = removeEntity(entity);
+            if (!removal.removed()) {
+                newlyProtected++;
+                continue;
+            }
             removed++;
+            logicalRemoved += removal.logicalAmount();
         }
         int protectedCount = plan.protectedCount() + newlyProtected;
         audit.log("KILLALL", actor,
@@ -123,10 +140,12 @@ public final class EntityCleanupService {
                         + " world=" + query.world().getName()
                         + " scope=" + query.scopeDescription()
                         + " planned=" + plan.candidateIds().size()
-                        + " removed=" + removed
+                        + " representativesRemoved=" + removed
+                        + " logicalRemoved=" + logicalRemoved
                         + " protected=" + protectedCount
-                        + " missing=" + remaining.size());
-        return new Result(plan.matched(), protectedCount, removed);
+                        + " missing=" + remaining.size()
+                        + " wildStacker=" + wildStacker.active());
+        return new Result(plan.matched(), protectedCount, removed, logicalRemoved);
     }
 
     /**
@@ -165,8 +184,13 @@ public final class EntityCleanupService {
                 state.newlyProtected++;
                 continue;
             }
-            entity.remove();
+            WildStackerAdapter.Removal removal = removeEntity(entity);
+            if (!removal.removed()) {
+                state.newlyProtected++;
+                continue;
+            }
             state.removed++;
+            state.logicalRemoved += removal.logicalAmount();
         }
 
         if (state.index >= state.ids.size()) {
@@ -189,11 +213,12 @@ public final class EntityCleanupService {
                         + " world=" + query.world().getName()
                         + " scope=" + query.scopeDescription()
                         + " planned=" + state.plan.candidateIds().size()
-                        + " removed=" + state.removed
+                        + " representativesRemoved=" + state.removed
+                        + " logicalRemoved=" + state.logicalRemoved
                         + " protected=" + protectedCount
                         + " missing=" + state.missing
                         + " batched=true");
-        return new Result(state.plan.matched(), protectedCount, state.removed);
+        return new Result(state.plan.matched(), protectedCount, state.removed, state.logicalRemoved);
     }
 
     private static boolean withinScope(Query query, Entity entity) {
@@ -223,7 +248,13 @@ public final class EntityCleanupService {
         if (policy.protectVillagers() && entity instanceof AbstractVillager) return true;
         if (policy.protectArmorStands() && entity instanceof ArmorStand) return true;
         if (policy.protectDisplays() && entity instanceof Display) return true;
-        return policy.protectPluginMetadata() && looksPluginOwned(entity);
+        if (policy.protectPluginMetadata() && looksPluginOwned(entity)) return true;
+        return wildStacker.inspect(entity).mode() == WildStackerAdapter.Mode.PROTECT;
+    }
+
+    private WildStackerAdapter.Removal removeEntity(Entity entity) {
+        WildStackerAdapter.Inspection inspection = wildStacker.inspect(entity);
+        return wildStacker.remove(entity, inspection);
     }
 
     private static boolean looksPluginOwned(Entity entity) {
@@ -273,6 +304,7 @@ public final class EntityCleanupService {
         private final List<UUID> ids;
         private int index;
         private int removed;
+        private int logicalRemoved;
         private int newlyProtected;
         private int missing;
 
@@ -283,5 +315,15 @@ public final class EntityCleanupService {
         }
     }
 
-    public record Result(int matched, int protectedCount, int removed) { }
+    public record Result(int matched, int protectedCount, int removed, int logicalRemoved) {
+        public Result {
+            if (matched < 0 || protectedCount < 0 || removed < 0 || logicalRemoved < 0) {
+                throw new IllegalArgumentException("counts");
+            }
+        }
+
+        public Result(int matched, int protectedCount, int removed) {
+            this(matched, protectedCount, removed, removed);
+        }
+    }
 }
