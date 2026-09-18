@@ -36,6 +36,36 @@ class PlayerAdminCommandTest {
         verify(messages, never()).send(actor, "no-permission");
     }
 
+    @Test void selfFlightUsesProgressionPermissionRatherThanAdminFly() {
+        Player actor = player("RankedPlayer");
+        when(actor.hasPermission("plexonutility.fly")).thenReturn(true);
+        when(actor.hasPermission("plexonutility.admin.fly")).thenReturn(false);
+        MessageService messages = mock(MessageService.class);
+        PlayerManagementService players = mock(PlayerManagementService.class);
+        when(players.canManageFlight(actor)).thenReturn(true);
+        when(players.toggleFlight(actor, actor)).thenReturn(true);
+        PlayerAdminCommand executor = new PlayerAdminCommand(PlayerAdminCommandTest::enabledConfig, messages, players);
+
+        executor.onCommand(actor, command("fly"), "fly", new String[0]);
+
+        verify(players).toggleFlight(actor, actor);
+        verify(messages, never()).send(actor, "no-permission");
+    }
+
+    @Test void selfFlightWithoutProgressionPermissionIsDeniedEvenWithLegacyAdminFly() {
+        Player actor = player("LegacyAdmin");
+        when(actor.hasPermission("plexonutility.fly")).thenReturn(false);
+        when(actor.hasPermission("plexonutility.admin.fly")).thenReturn(true);
+        MessageService messages = mock(MessageService.class);
+        PlayerManagementService players = mock(PlayerManagementService.class);
+        PlayerAdminCommand executor = new PlayerAdminCommand(PlayerAdminCommandTest::enabledConfig, messages, players);
+
+        executor.onCommand(actor, command("fly"), "fly", new String[0]);
+
+        verify(players, never()).toggleFlight(actor, actor);
+        verify(messages).send(actor, "no-permission");
+    }
+
     @Test void targetingAnotherPlayerRequiresOthersPermission() {
         Player actor = player("Staff");
         Player target = player("Target");
