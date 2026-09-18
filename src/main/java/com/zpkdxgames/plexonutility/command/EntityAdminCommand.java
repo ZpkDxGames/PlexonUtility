@@ -94,7 +94,7 @@ public final class EntityAdminCommand implements TabExecutor {
                     "count", Integer.toString(preview.removable()), "seconds", "15"));
             return true;
         }
-        sendCleanupResult(sender, query, cleanup.execute(sender, query));
+        executeCleanup(sender, plan);
         return true;
     }
 
@@ -104,7 +104,7 @@ public final class EntityAdminCommand implements TabExecutor {
             messages.send(sender, "admin-killall-confirm-expired");
             return true;
         }
-        sendCleanupResult(sender, plan.query(), cleanup.execute(sender, plan));
+        executeCleanup(sender, plan);
         return true;
     }
 
@@ -153,6 +153,16 @@ public final class EntityAdminCommand implements TabExecutor {
             return null;
         }
         return new EntityCleanupService.Query(selection, player.getWorld(), player.getLocation(), (double) radius);
+    }
+
+    private void executeCleanup(CommandSender sender, EntityCleanupService.Plan plan) {
+        cleanup.executeBatched(sender, plan).whenComplete((result, error) -> {
+            if (error != null) {
+                messages.send(sender, "admin-killall-confirm-expired");
+                return;
+            }
+            sendCleanupResult(sender, plan.query(), result);
+        });
     }
 
     private void sendCleanupResult(CommandSender sender, EntityCleanupService.Query query, EntityCleanupService.Result result) {
