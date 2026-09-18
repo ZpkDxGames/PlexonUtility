@@ -12,6 +12,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,7 +35,7 @@ import java.util.function.Consumer;
 public final class AdminDataStore implements AutoCloseable {
     public static final int SCHEMA_VERSION = 2;
     private static final int MAX_WRITE_ATTEMPTS = 3;
-    private static final long CLOSE_TIMEOUT_SECONDS = 3L;
+    private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(3);
 
     private final JavaPlugin plugin;
     private final CoreScheduler scheduler;
@@ -341,13 +342,19 @@ public final class AdminDataStore implements AutoCloseable {
 
     @Override
     public void close() {
+        close(CLOSE_TIMEOUT);
+    }
+
+    void close(Duration timeout) {
+        Objects.requireNonNull(timeout, "timeout");
+        if (timeout.isNegative() || timeout.isZero()) throw new IllegalArgumentException("timeout");
         CompletableFuture<Void> pending;
         synchronized (this) {
             closed = true;
             pending = pendingWrite;
         }
         try {
-            pending.get(CLOSE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            pending.get(Math.max(1L, timeout.toMillis()), TimeUnit.MILLISECONDS);
         } catch (TimeoutException exception) {
             PersistenceStatus status = status();
             plugin.getLogger().severe("Timed out waiting for admin-data.yml persistence; dirty="
