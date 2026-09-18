@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 /** One-pass bounded entity cleanup with conservative protection defaults. */
@@ -36,14 +37,23 @@ public final class EntityCleanupService {
     }
 
     public Preview preview(Query query) {
+        return plan(query).preview();
+    }
+
+    public Plan plan(Query query) {
         int matched = 0;
         int protectedCount = 0;
+        Set<UUID> removable = new java.util.LinkedHashSet<>();
         for (Entity entity : candidates(query)) {
             if (!EntitySelector.matches(query.selection(), entity)) continue;
             matched++;
-            if (isProtected(query.selection(), entity)) protectedCount++;
+            if (isProtected(query.selection(), entity)) {
+                protectedCount++;
+            } else {
+                removable.add(entity.getUniqueId());
+            }
         }
-        return new Preview(matched, protectedCount, Math.max(0, matched - protectedCount));
+        return new Plan(query, Set.copyOf(removable), matched, protectedCount);
     }
 
     public Result execute(CommandSender actor, Query query) {
@@ -68,6 +78,36 @@ public final class EntityCleanupService {
                         + " protected=" + protectedCount
                         + " matched=" + matched);
         return new Result(matched, protectedCount, removed);
+    }
+
+    /**
+     * Executes only UUIDs captured by a prior plan. Every surviving candidate is revalidated
+     * immediately before removal; entities spawned after preview can never enter the operation.
+     */
+    public Result execute(CommandSender actor, Plan plan) {
+        Query query = plan.query();
+        int removed = 0;
+        int newlyProtected = 0;
+        Set<UUID> remaining = new java.util.HashSet<>(plan.candidateIds());
+        for (Entity entity : candidates(query)) {
+            if (!remaining.remove(entity.getUniqueId())) continue;
+            if (!EntitySelector.matches(query.selection(), entity) || isProtected(query.selection(), entity)) {
+                newlyProtected++;
+                continue;
+            }
+            entity.remove();
+            removed++;
+        }
+        int protectedCount = plan.protectedCount() + newlyProtected;
+        audit.log("KILLALL", actor,
+                "selector=" + query.selection().canonical()
+                        + " world=" + query.world().getName()
+                        + " scope=" + query.scopeDescription()
+                        + " planned=" + plan.candidateIds().size()
+                        + " removed=" + removed
+                        + " protected=" + protectedCount
+                        + " missing=" + remaining.size());
+        return new Result(plan.matched(), protectedCount, removed);
     }
 
     private Collection<Entity> candidates(Query query) {
@@ -122,5 +162,18 @@ public final class EntityCleanupService {
     }
 
     public record Preview(int matched, int protectedCount, int removable) { }
+
+    public record Plan(Query query, Set<UUID> candidateIds, int matched, int protectedCount) {
+        public Plan {
+            Objects.requireNonNull(query, "query");
+            candidateIds = Set.copyOf(Objects.requireNonNull(candidateIds, "candidateIds"));
+            if (matched < 0 || protectedCount < 0 || protectedCount > matched) throw new IllegalArgumentException("counts");
+        }
+
+        public Preview preview() {
+            return new Preview(matched, protectedCount, candidateIds.size());
+        }
+    }
+
     public record Result(int matched, int protectedCount, int removed) { }
 }
