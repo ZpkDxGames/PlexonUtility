@@ -78,7 +78,13 @@ public final class EntityAdminCommand implements TabExecutor {
 
         EntityCleanupService.Query query = query(sender, selection, args);
         if (query == null) return true;
-        EntityCleanupService.Plan plan = cleanup.plan(query);
+        final EntityCleanupService.Plan plan;
+        try {
+            plan = cleanup.plan(query);
+        } catch (EntityCleanupService.PlanLimitExceededException exception) {
+            messages.send(sender, "admin-killall-too-large", Map.of("limit", Integer.toString(exception.limit())));
+            return true;
+        }
         EntityCleanupService.Preview preview = plan.preview();
         if (preview.removable() == 0) {
             messages.send(sender, "admin-killall-none", Map.of(
