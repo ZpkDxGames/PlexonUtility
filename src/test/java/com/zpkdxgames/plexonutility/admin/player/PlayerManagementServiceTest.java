@@ -76,7 +76,7 @@ class PlayerManagementServiceTest {
 
     @Test void permissionLossRevokesOnlyUtilityOwnedFlight() {
         Player player = player(GameMode.SURVIVAL);
-        when(player.hasPermission("plexonutility.fly")).thenReturn(true, false);
+        when(player.hasPermission("plexonutility.fly")).thenReturn(false);
         PlayerManagementService service = service();
 
         service.setFlight(player, player, true);
