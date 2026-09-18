@@ -133,6 +133,6 @@ PlexonUtility locally owns only cheap product-specific state: cooldowns, AFK sta
 
 ## Publication boundary
 
-Source CI uses Java 25, Paper 26.2 and PlexonCore 2.0.5 and verifies tests plus final JAR contents/ownership (`/spawn` must be absent).
+Source CI uses Java 25, Paper 26.2 and PlexonCore 2.1.0 and verifies tests plus final JAR contents/ownership (`/spawn` must be absent).
 
 Stable 3.5 publication is stricter than source CI: the release workflow also requires a committed `releases/3.5.0-runtime-smoke.txt` containing real Paper 26.2/Java 25 PASS evidence. Without it, source may merge but stable publication is intentionally blocked.
