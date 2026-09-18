@@ -1,5 +1,6 @@
 package com.zpkdxgames.plexonutility.admin.entity;
 
+import com.zpkdxgames.plexoncore.scheduler.CoreScheduler;
 import com.zpkdxgames.plexonutility.admin.AdminAuditService;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import org.bukkit.Location;
@@ -12,7 +13,9 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Tameable;
+import org.bukkit.plugin.java.JavaPlugin;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -20,18 +23,34 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /** One-pass bounded entity cleanup with conservative protection defaults. */
 public final class EntityCleanupService {
+    static final int MAX_REMOVALS_PER_TICK = 40;
+    private static final Duration NEXT_BATCH_DELAY = Duration.ofMillis(50);
     private static final Set<EntityType> BOSSES = Set.of(EntityType.ENDER_DRAGON, EntityType.WITHER);
     private static final Set<EntityType> ALWAYS_PROTECTED = Set.of(
             EntityType.PLAYER, EntityType.INTERACTION, EntityType.MARKER);
 
+    private final JavaPlugin plugin;
+    private final CoreScheduler scheduler;
     private final Supplier<UtilityConfig> config;
     private final AdminAuditService audit;
 
+    public EntityCleanupService(JavaPlugin plugin, CoreScheduler scheduler,
+                                Supplier<UtilityConfig> config, AdminAuditService audit) {
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
+        this.config = Objects.requireNonNull(config, "config");
+        this.audit = Objects.requireNonNull(audit, "audit");
+    }
+
+    /** Compatibility constructor for unit tests/source callers. */
     public EntityCleanupService(Supplier<UtilityConfig> config, AdminAuditService audit) {
+        this.plugin = null;
+        this.scheduler = null;
         this.config = Objects.requireNonNull(config, "config");
         this.audit = Objects.requireNonNull(audit, "audit");
     }
@@ -110,6 +129,79 @@ public final class EntityCleanupService {
         return new Result(plan.matched(), protectedCount, removed);
     }
 
+    /**
+     * Executes a confirmed immutable plan with one Core-owned coordinator. Small plans remain
+     * immediate; larger plans process at most {@value MAX_REMOVALS_PER_TICK} candidates per tick.
+     */
+    public CompletableFuture<Result> executeBatched(CommandSender actor, Plan plan) {
+        if (plugin == null || scheduler == null || plan.candidateIds().size() <= MAX_REMOVALS_PER_TICK) {
+            return CompletableFuture.completedFuture(execute(actor, plan));
+        }
+        BatchState state = new BatchState(actor, plan, new ArrayList<>(plan.candidateIds()));
+        CompletableFuture<Result> result = new CompletableFuture<>();
+        runBatch(state, result);
+        return result;
+    }
+
+    private void runBatch(BatchState state, CompletableFuture<Result> result) {
+        if (result.isDone()) return;
+        if (plugin == null || !plugin.isEnabled()) {
+            result.completeExceptionally(new IllegalStateException("PlexonUtility disabled during cleanup batch"));
+            return;
+        }
+
+        int processed = 0;
+        while (processed < MAX_REMOVALS_PER_TICK && state.index < state.ids.size()) {
+            UUID id = state.ids.get(state.index++);
+            processed++;
+            Entity entity = state.plan.query().world().getEntity(id);
+            if (entity == null || !entity.isValid()) {
+                state.missing++;
+                continue;
+            }
+            if (!withinScope(state.plan.query(), entity)
+                    || !EntitySelector.matches(state.plan.query().selection(), entity)
+                    || isProtected(state.plan.query().selection(), entity)) {
+                state.newlyProtected++;
+                continue;
+            }
+            entity.remove();
+            state.removed++;
+        }
+
+        if (state.index >= state.ids.size()) {
+            result.complete(finishBatch(state));
+            return;
+        }
+
+        CoreScheduler.ObservedTaskHandle next = scheduler.schedulePrimaryObserved(
+                plugin, NEXT_BATCH_DELAY, () -> runBatch(state, result));
+        next.completion().whenComplete((ignored, error) -> {
+            if (error != null && !result.isDone()) result.completeExceptionally(error);
+        });
+    }
+
+    private Result finishBatch(BatchState state) {
+        Query query = state.plan.query();
+        int protectedCount = state.plan.protectedCount() + state.newlyProtected;
+        audit.log("KILLALL", state.actor,
+                "selector=" + query.selection().canonical()
+                        + " world=" + query.world().getName()
+                        + " scope=" + query.scopeDescription()
+                        + " planned=" + state.plan.candidateIds().size()
+                        + " removed=" + state.removed
+                        + " protected=" + protectedCount
+                        + " missing=" + state.missing
+                        + " batched=true");
+        return new Result(state.plan.matched(), protectedCount, state.removed);
+    }
+
+    private static boolean withinScope(Query query, Entity entity) {
+        if (!entity.getWorld().equals(query.world())) return false;
+        if (query.radius() == null) return true;
+        return entity.getLocation().distanceSquared(query.center()) <= query.radius() * query.radius();
+    }
+
     private Collection<Entity> candidates(Query query) {
         if (query.radius() == null) return query.world().getEntities();
         double radius = query.radius();
@@ -172,6 +264,22 @@ public final class EntityCleanupService {
 
         public Preview preview() {
             return new Preview(matched, protectedCount, candidateIds.size());
+        }
+    }
+
+    private static final class BatchState {
+        private final CommandSender actor;
+        private final Plan plan;
+        private final List<UUID> ids;
+        private int index;
+        private int removed;
+        private int newlyProtected;
+        private int missing;
+
+        private BatchState(CommandSender actor, Plan plan, List<UUID> ids) {
+            this.actor = actor;
+            this.plan = plan;
+            this.ids = ids;
         }
     }
 
