@@ -167,7 +167,7 @@ public final class EntityAdminCommand implements TabExecutor {
 
     private void sendCleanupResult(CommandSender sender, EntityCleanupService.Query query, EntityCleanupService.Result result) {
         messages.send(sender, "admin-killall-success", Map.of(
-                "count", Integer.toString(result.removed()),
+                "count", Integer.toString(result.logicalRemoved()),
                 "protected", Integer.toString(result.protectedCount()),
                 "selector", query.selection().canonical(),
                 "world", query.world().getName()));
