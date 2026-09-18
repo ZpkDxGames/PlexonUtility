@@ -24,7 +24,9 @@ import com.zpkdxgames.plexonutility.command.EntityAdminCommand;
 import com.zpkdxgames.plexonutility.command.PlayerAdminCommand;
 import com.zpkdxgames.plexonutility.command.UtilityAdminCommand;
 import com.zpkdxgames.plexonutility.command.UtilityCommand;
+import com.zpkdxgames.plexonutility.config.FileMigrationTransaction;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
+import com.zpkdxgames.plexonutility.config.UtilityConfigFile;
 import com.zpkdxgames.plexonutility.cooldown.CooldownService;
 import com.zpkdxgames.plexonutility.feature.Feature;
 import com.zpkdxgames.plexonutility.feedback.FeedbackService;
@@ -37,7 +39,6 @@ import com.zpkdxgames.plexonutility.placeholder.UtilityPlaceholderExpansion;
 import com.zpkdxgames.plexonutility.service.PlayerUtilityService;
 import com.zpkdxgames.plexonutility.trash.TrashService;
 import org.bukkit.command.PluginCommand;
-import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -46,7 +47,7 @@ import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
-import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -67,21 +68,20 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
     private PlayerManagementService playerManagement;
     private UtilityPlaceholderExpansion placeholderExpansion;
     private PlexonUtilityAPI api;
+    private volatile long runtimeGeneration;
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
-        getConfig().options().copyDefaults(true);
-        saveConfig();
-        if (!new File(getDataFolder(), "messages.yml").exists()) saveResource("messages.yml", false);
-
         try {
-            utilityConfig = loadUtilityConfigCandidate();
+            UtilityConfigFile.Candidate configCandidate = UtilityConfigFile.prepare(this);
+            utilityConfig = configCandidate.runtime();
             cooldowns = new CooldownService();
             coreBridge = new CoreBridge(this);
             PlexonCoreAPI core = coreBridge.connect(utilityConfig.enabledFeatures(), utilityConfig.admin());
             validate350Config(core, utilityConfig);
             messages = new MessageService(this, core.text());
+            MessageService.Candidate messageCandidate = messages.prepareCandidate();
+            messages.apply(messageCandidate);
             feedback = new FeedbackService(this, this::utilityConfig, messages);
 
             complements = new ComplementService(getServer().getPluginManager(), core.integrations());
@@ -159,7 +159,11 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
 
             api = new DefaultUtilityAPI();
             getServer().getServicesManager().register(PlexonUtilityAPI.class, api, this, ServicePriority.Normal);
-            coreBridge.ready("Core text/gui/scheduler/integrations shared; admin-toolkit=" + utilityConfig.admin().enabled()
+
+            persistCommittedMigrations(configCandidate, messageCandidate);
+            runtimeGeneration = 1L;
+            coreBridge.ready("generation=" + runtimeGeneration
+                    + "; Core text/gui/scheduler/integrations shared; admin-toolkit=" + utilityConfig.admin().enabled()
                     + "; synthetic-presence=" + vanishService.syntheticPresenceMode()
                     + "; family-ready=" + family.readyCount() + "/" + family.totalCount()
                     + "; enabled features: " + utilityConfig.enabledFeatures());
@@ -197,30 +201,86 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         if (cooldowns != null) cooldowns.clear(event.getPlayer().getUniqueId());
     }
 
-    public void reloadUtilityState() {
-        UtilityConfig candidateConfig = loadUtilityConfigCandidate();
-        YamlConfiguration candidateMessages = messages.loadCandidate();
+    public synchronized void reloadUtilityState() {
+        UtilityConfigFile.Candidate configCandidate = UtilityConfigFile.prepare(this);
+        MessageService.Candidate messageCandidate = messages.prepareCandidate();
+        UtilityConfig candidateConfig = configCandidate.runtime();
         validate350Config(coreBridge.core(), candidateConfig);
 
-        messages.apply(candidateMessages);
-        utilityConfig = candidateConfig;
+        UtilityConfig previousConfig = utilityConfig;
+        YamlConfiguration previousMessages = messages.snapshot();
+        long previousGeneration = runtimeGeneration;
+
+        try {
+            messages.apply(messageCandidate);
+            utilityConfig = candidateConfig;
+            reloadGenerationServices();
+
+            // Disk migration is part of the successful generation commit. Both files are staged
+            // before either operator file is replaced and restored on persistence failure.
+            persistCommittedMigrations(configCandidate, messageCandidate);
+            runtimeGeneration = previousGeneration + 1L;
+
+            if (coreBridge != null && coreBridge.core() != null) {
+                coreBridge.ready("generation=" + runtimeGeneration
+                        + "; Reloaded; admin-toolkit=" + candidateConfig.admin().enabled()
+                        + "; synthetic-presence=" + (vanishService == null ? "unavailable" : vanishService.syntheticPresenceMode())
+                        + "; family-ready=" + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
+                        + "; enabled features: " + candidateConfig.enabledFeatures());
+            }
+        } catch (RuntimeException failure) {
+            try {
+                messages.apply(previousMessages);
+                utilityConfig = previousConfig;
+                reloadGenerationServices();
+                runtimeGeneration = previousGeneration;
+                if (coreBridge != null) coreBridge.degraded("Reload rejected; previous generation "
+                        + previousGeneration + " restored: " + detail(failure));
+            } catch (RuntimeException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+                if (coreBridge != null) coreBridge.degraded("Reload rollback failed: " + detail(rollbackFailure));
+            }
+            throw failure;
+        }
+    }
+
+    private void reloadGenerationServices() {
         if (afkManager != null) afkManager.reload();
         if (vanishService != null) vanishService.reload();
         if (playerManagement != null) playerManagement.reload();
         if (complements != null) complements.refresh();
         if (family != null) family.refresh();
+    }
 
-        if (coreBridge != null && coreBridge.core() != null) {
-            coreBridge.ready("Reloaded; admin-toolkit=" + candidateConfig.admin().enabled()
-                    + "; synthetic-presence=" + (vanishService == null ? "unavailable" : vanishService.syntheticPresenceMode())
-                    + "; family-ready=" + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
-                    + "; enabled features: " + candidateConfig.enabledFeatures());
+    private void persistCommittedMigrations(UtilityConfigFile.Candidate configCandidate,
+                                            MessageService.Candidate messageCandidate) {
+        List<FileMigrationTransaction.Update> updates = new ArrayList<>(2);
+        updates.add(new FileMigrationTransaction.Update(
+                new File(getDataFolder(), "config.yml").toPath(),
+                configCandidate.yaml().saveToString(),
+                configCandidate.migrated(),
+                configCandidate.sourceExisted()));
+        updates.add(new FileMigrationTransaction.Update(
+                new File(getDataFolder(), "messages.yml").toPath(),
+                messageCandidate.catalog().saveToString(),
+                messageCandidate.migrated(),
+                messageCandidate.sourceExisted()));
+        FileMigrationTransaction.commit(updates);
+        if (configCandidate.migrated() > 0) {
+            getLogger().info("Committed config.yml schema migration "
+                    + configCandidate.sourceSchema() + " -> " + UtilityConfigFile.CURRENT_SCHEMA
+                    + " (" + configCandidate.migrated() + " value(s) added).");
+        }
+        if (messageCandidate.migrated() > 0) {
+            getLogger().info("Committed messages.yml migration with "
+                    + messageCandidate.migrated() + " bundled key(s) added.");
         }
     }
 
     public UtilityConfig utilityConfig() { return utilityConfig; }
     public PlexonCoreAPI core() { return coreBridge == null ? null : coreBridge.core(); }
     public boolean placeholderRegistered() { return placeholderExpansion != null; }
+    public long runtimeGeneration() { return runtimeGeneration; }
 
     private void registerPlaceholderExpansion() {
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") == null) return;
@@ -233,17 +293,6 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         } else {
             getLogger().warning("PlaceholderAPI was present but the PlexonUtility expansion could not be registered.");
         }
-    }
-
-    private UtilityConfig loadUtilityConfigCandidate() {
-        File file = new File(getDataFolder(), "config.yml");
-        YamlConfiguration candidate = new YamlConfiguration();
-        try {
-            candidate.load(file);
-        } catch (IOException | InvalidConfigurationException exception) {
-            throw new IllegalArgumentException("config.yml could not be loaded: " + exception.getMessage(), exception);
-        }
-        return UtilityConfig.from(candidate);
     }
 
     private static void validate350Config(PlexonCoreAPI core, UtilityConfig config) {
