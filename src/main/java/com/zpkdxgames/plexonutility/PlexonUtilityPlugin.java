@@ -16,6 +16,7 @@ import com.zpkdxgames.plexonutility.admin.vanish.VanishListener;
 import com.zpkdxgames.plexonutility.admin.vanish.VanishService;
 import com.zpkdxgames.plexonutility.afk.AfkManager;
 import com.zpkdxgames.plexonutility.afk.AfkTracker;
+import com.zpkdxgames.plexonutility.api.AfkState;
 import com.zpkdxgames.plexonutility.api.PlexonUtilityAPI;
 import com.zpkdxgames.plexonutility.command.AdminActionCommand;
 import com.zpkdxgames.plexonutility.command.AfkCommand;
@@ -23,7 +24,9 @@ import com.zpkdxgames.plexonutility.command.EntityAdminCommand;
 import com.zpkdxgames.plexonutility.command.PlayerAdminCommand;
 import com.zpkdxgames.plexonutility.command.UtilityAdminCommand;
 import com.zpkdxgames.plexonutility.command.UtilityCommand;
+import com.zpkdxgames.plexonutility.config.FileMigrationTransaction;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
+import com.zpkdxgames.plexonutility.config.UtilityConfigFile;
 import com.zpkdxgames.plexonutility.cooldown.CooldownService;
 import com.zpkdxgames.plexonutility.feature.Feature;
 import com.zpkdxgames.plexonutility.feedback.FeedbackService;
@@ -36,7 +39,6 @@ import com.zpkdxgames.plexonutility.placeholder.UtilityPlaceholderExpansion;
 import com.zpkdxgames.plexonutility.service.PlayerUtilityService;
 import com.zpkdxgames.plexonutility.trash.TrashService;
 import org.bukkit.command.PluginCommand;
-import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -45,7 +47,7 @@ import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
-import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -66,21 +68,21 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
     private PlayerManagementService playerManagement;
     private UtilityPlaceholderExpansion placeholderExpansion;
     private PlexonUtilityAPI api;
+    private volatile long runtimeGeneration;
+    private volatile String runtimeFailure;
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
-        getConfig().options().copyDefaults(true);
-        saveConfig();
-        if (!new File(getDataFolder(), "messages.yml").exists()) saveResource("messages.yml", false);
-
         try {
-            utilityConfig = loadUtilityConfigCandidate();
+            UtilityConfigFile.Candidate configCandidate = UtilityConfigFile.prepare(this);
+            utilityConfig = configCandidate.runtime();
             cooldowns = new CooldownService();
             coreBridge = new CoreBridge(this);
             PlexonCoreAPI core = coreBridge.connect(utilityConfig.enabledFeatures(), utilityConfig.admin());
             validate350Config(core, utilityConfig);
             messages = new MessageService(this, core.text());
+            MessageService.Candidate messageCandidate = messages.prepareCandidate();
+            messages.apply(messageCandidate);
             feedback = new FeedbackService(this, this::utilityConfig, messages);
 
             complements = new ComplementService(getServer().getPluginManager(), core.integrations());
@@ -104,16 +106,16 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             command("utility").setExecutor(utilityMenu);
             command("trash").setExecutor(new TrashService(this::utilityConfig, messages, core.text(), feedback));
 
-            adminData = new AdminDataStore(this, core.scheduler());
+            adminData = new AdminDataStore(this, core.scheduler(), this::onAdminDataHealthChanged);
             adminData.load();
             AdminAuditService audit = new AdminAuditService(getLogger());
             SyntheticPresenceBridge syntheticPresence = new SyntheticPresenceBridge(this, this::utilityConfig, core.text());
             vanishService = new VanishService(this, this::utilityConfig, adminData, audit, syntheticPresence);
-            playerManagement = new PlayerManagementService(this::utilityConfig, audit);
-            EntityCleanupService entityCleanup = new EntityCleanupService(this::utilityConfig, audit);
-            EntitySpawnService entitySpawn = new EntitySpawnService(this::utilityConfig, audit);
+            playerManagement = new PlayerManagementService(this, this::utilityConfig, audit, core.scheduler());
+            EntityCleanupService entityCleanup = new EntityCleanupService(this, core.scheduler(), this::utilityConfig, audit);
+            EntitySpawnService entitySpawn = new EntitySpawnService(this, core.scheduler(), this::utilityConfig, audit);
             ModerationService moderation = new ModerationService(messages, audit);
-            PrisonService prison = new PrisonService(this, adminData, audit);
+            PrisonService prison = new PrisonService(this, adminData, audit, core.scheduler());
             InventoryInspectionService inventory = new InventoryInspectionService(core.gui(), utilityMenu.itemFactory(), messages);
             AdminMenuService adminMenu = new AdminMenuService(
                     this, this::utilityConfig, messages, core.gui(), core.scheduler(), utilityMenu.itemFactory(),
@@ -153,15 +155,17 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             getServer().getPluginManager().registerEvents(new VanishListener(this::utilityConfig, vanishService), this);
             getServer().getPluginManager().registerEvents(inventory, this);
             getServer().getPluginManager().registerEvents(playerManagement, this);
+            playerManagement.start();
             afkManager.start();
             registerPlaceholderExpansion();
 
             api = new DefaultUtilityAPI();
             getServer().getServicesManager().register(PlexonUtilityAPI.class, api, this, ServicePriority.Normal);
-            coreBridge.ready("Core text/gui/scheduler/integrations shared; admin-toolkit=" + utilityConfig.admin().enabled()
-                    + "; synthetic-presence=" + vanishService.syntheticPresenceMode()
-                    + "; family-ready=" + family.readyCount() + "/" + family.totalCount()
-                    + "; enabled features: " + utilityConfig.enabledFeatures());
+
+            persistCommittedMigrations(configCandidate, messageCandidate);
+            runtimeGeneration = 1L;
+            runtimeFailure = null;
+            publishRuntimeHealth("startup committed");
             getLogger().info("PlexonUtility " + getPluginMeta().getVersion() + " enabled with " + utilityConfig.enabledFeatures()
                     + "; Core-native text/gui/scheduler/integrations; admin-toolkit=" + utilityConfig.admin().enabled()
                     + "; synthetic-presence=" + vanishService.syntheticPresenceMode()
@@ -196,30 +200,137 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         if (cooldowns != null) cooldowns.clear(event.getPlayer().getUniqueId());
     }
 
-    public void reloadUtilityState() {
-        UtilityConfig candidateConfig = loadUtilityConfigCandidate();
-        YamlConfiguration candidateMessages = messages.loadCandidate();
+    public synchronized void reloadUtilityState() {
+        UtilityConfigFile.Candidate configCandidate = UtilityConfigFile.prepare(this);
+        MessageService.Candidate messageCandidate = messages.prepareCandidate();
+        UtilityConfig candidateConfig = configCandidate.runtime();
         validate350Config(coreBridge.core(), candidateConfig);
 
-        messages.apply(candidateMessages);
-        utilityConfig = candidateConfig;
+        UtilityConfig previousConfig = utilityConfig;
+        YamlConfiguration previousMessages = messages.snapshot();
+        long previousGeneration = runtimeGeneration;
+
+        try {
+            messages.apply(messageCandidate);
+            utilityConfig = candidateConfig;
+            reloadGenerationServices();
+
+            long nextGeneration = previousGeneration + 1L;
+            if (coreBridge != null && coreBridge.core() != null) {
+                coreBridge.refreshCapabilities(candidateConfig,
+                        "generation=" + nextGeneration
+                                + "; Reloaded; admin-toolkit=" + candidateConfig.admin().enabled()
+                                + "; synthetic-presence=" + (vanishService == null ? "unavailable" : vanishService.syntheticPresenceMode())
+                                + "; family-ready=" + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
+                                + "; enabled features: " + candidateConfig.enabledFeatures());
+            }
+
+            // Disk migration is part of the successful generation commit. Both files are staged
+            // before either operator file is replaced and restored on persistence failure.
+            persistCommittedMigrations(configCandidate, messageCandidate);
+            runtimeGeneration = nextGeneration;
+            runtimeFailure = null;
+            publishRuntimeHealth("reload committed");
+        } catch (RuntimeException failure) {
+            try {
+                messages.apply(previousMessages);
+                utilityConfig = previousConfig;
+                reloadGenerationServices();
+                runtimeGeneration = previousGeneration;
+                if (coreBridge != null && coreBridge.core() != null) {
+                    coreBridge.refreshCapabilities(previousConfig,
+                            "generation=" + previousGeneration + "; previous runtime restored after rejected reload");
+                    runtimeFailure = "Reload rejected; previous generation "
+                            + previousGeneration + " restored: " + detail(failure);
+                    publishRuntimeHealth("reload rollback");
+                }
+            } catch (RuntimeException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+                runtimeFailure = "Reload rollback failed: " + detail(rollbackFailure);
+                if (coreBridge != null) coreBridge.degraded(runtimeFailure);
+            }
+            throw failure;
+        }
+    }
+
+    private void reloadGenerationServices() {
         if (afkManager != null) afkManager.reload();
         if (vanishService != null) vanishService.reload();
         if (playerManagement != null) playerManagement.reload();
         if (complements != null) complements.refresh();
         if (family != null) family.refresh();
+    }
 
-        if (coreBridge != null && coreBridge.core() != null) {
-            coreBridge.ready("Reloaded; admin-toolkit=" + candidateConfig.admin().enabled()
-                    + "; synthetic-presence=" + (vanishService == null ? "unavailable" : vanishService.syntheticPresenceMode())
-                    + "; family-ready=" + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
-                    + "; enabled features: " + candidateConfig.enabledFeatures());
+    private void persistCommittedMigrations(UtilityConfigFile.Candidate configCandidate,
+                                            MessageService.Candidate messageCandidate) {
+        List<FileMigrationTransaction.Update> updates = new ArrayList<>(2);
+        updates.add(new FileMigrationTransaction.Update(
+                new File(getDataFolder(), "config.yml").toPath(),
+                configCandidate.yaml().saveToString(),
+                configCandidate.migrated(),
+                configCandidate.sourceExisted()));
+        updates.add(new FileMigrationTransaction.Update(
+                new File(getDataFolder(), "messages.yml").toPath(),
+                messageCandidate.catalog().saveToString(),
+                messageCandidate.migrated(),
+                messageCandidate.sourceExisted()));
+        FileMigrationTransaction.commit(updates);
+        if (configCandidate.migrated() > 0) {
+            getLogger().info("Committed config.yml schema migration "
+                    + configCandidate.sourceSchema() + " -> " + UtilityConfigFile.CURRENT_SCHEMA
+                    + " (" + configCandidate.migrated() + " value(s) added).");
+        }
+        if (messageCandidate.migrated() > 0) {
+            getLogger().info("Committed messages.yml migration with "
+                    + messageCandidate.migrated() + " bundled key(s) added.");
+        }
+    }
+
+    private void onAdminDataHealthChanged(AdminDataStore.PersistenceStatus status) {
+        if (runtimeGeneration <= 0L || status == null) return;
+        publishRuntimeHealth("admin-data " + status.health().name().toLowerCase(java.util.Locale.ROOT));
+    }
+
+    private synchronized void publishRuntimeHealth(String context) {
+        if (coreBridge == null || coreBridge.core() == null || runtimeGeneration <= 0L) return;
+
+        AdminDataStore.PersistenceStatus persistence = adminData == null ? null : adminData.status();
+        boolean afkExpected = utilityConfig != null
+                && utilityConfig.enabled(Feature.AFK)
+                && utilityConfig.afk().autoTimeoutEnabled();
+        int afkTasks = afkManager == null ? 0 : afkManager.schedulerCount();
+        boolean afkHealthy = !afkExpected || afkTasks == 1;
+
+        String persistenceDetail = persistence == null
+                ? "unavailable"
+                : persistence.health().name() + "/dirty=" + persistence.dirty()
+                        + "/pending=" + persistence.pendingWrites()
+                        + "/rev=" + persistence.persistedRevision() + "/" + persistence.currentRevision();
+        String detail = "generation=" + runtimeGeneration
+                + "; context=" + context
+                + "; afk-scheduler=" + afkTasks + (afkExpected ? "/expected=1" : "/expected=0")
+                + "; admin-data=" + persistenceDetail
+                + "; synthetic-presence=" + (vanishService == null ? "unavailable" : vanishService.syntheticPresenceMode())
+                + "; family-ready=" + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
+                + "; enabled features=" + (utilityConfig == null ? Set.of() : utilityConfig.enabledFeatures());
+
+        boolean persistenceFailed = persistence != null
+                && persistence.health() == AdminDataStore.HealthState.DEGRADED;
+        if (runtimeFailure != null || persistenceFailed || !afkHealthy) {
+            String reason = runtimeFailure == null ? detail : runtimeFailure + "; " + detail;
+            coreBridge.degraded(reason);
+        } else {
+            coreBridge.ready(detail);
         }
     }
 
     public UtilityConfig utilityConfig() { return utilityConfig; }
     public PlexonCoreAPI core() { return coreBridge == null ? null : coreBridge.core(); }
     public boolean placeholderRegistered() { return placeholderExpansion != null; }
+    public long runtimeGeneration() { return runtimeGeneration; }
+    public AdminDataStore.PersistenceStatus adminDataStatus() {
+        return adminData == null ? null : adminData.status();
+    }
 
     private void registerPlaceholderExpansion() {
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") == null) return;
@@ -232,17 +343,6 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         } else {
             getLogger().warning("PlaceholderAPI was present but the PlexonUtility expansion could not be registered.");
         }
-    }
-
-    private UtilityConfig loadUtilityConfigCandidate() {
-        File file = new File(getDataFolder(), "config.yml");
-        YamlConfiguration candidate = new YamlConfiguration();
-        try {
-            candidate.load(file);
-        } catch (IOException | InvalidConfigurationException exception) {
-            throw new IllegalArgumentException("config.yml could not be loaded: " + exception.getMessage(), exception);
-        }
-        return UtilityConfig.from(candidate);
     }
 
     private static void validate350Config(PlexonCoreAPI core, UtilityConfig config) {
@@ -279,6 +379,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         @Override public boolean isEnabled(Feature feature) { return utilityConfig.enabled(feature); }
         @Override public Set<Feature> enabledFeatures() { return utilityConfig.enabledFeatures(); }
         @Override public boolean isAfk(UUID playerId) { return afkManager != null && afkManager.isAfk(playerId); }
+        @Override public AfkState afkState(UUID playerId) { return afkManager == null ? AfkState.untracked() : afkManager.afkState(playerId); }
         @Override public boolean isVanished(UUID playerId) { return vanishService != null && vanishService.isVanished(playerId); }
         @Override public boolean isGodMode(UUID playerId) { return playerManagement != null && playerManagement.isGodMode(playerId); }
     }

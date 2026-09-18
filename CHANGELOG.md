@@ -1,19 +1,24 @@
 # Changelog
 
-## 3.5.0 — 2026-09-12
+## 3.5.0 — 2026-09-18
 
-- Added bounded `/killall <category|entity> [radius|world [world]]` with player exclusion, conservative named/tamed/villager/armor-stand/display/plugin protections, explicit boss targeting, aggregate audit, and short-lived actor-specific confirmation for large removals.
-- Added `/spawnmob <entity> [amount]` with Paper spawnability validation, safe already-loaded nearby placement, configurable blocked types, and an absolute maximum of 100 entities.
-- Preserved PlexonTravel ownership of root `/spawn`; PlexonUtility registers `/spawnmob` only, and CI now rejects an accidental Utility `/spawn` registration.
-- Added permission-separated `/gamemode`, `/fly`, `/god`, `/speed`, and `/clearinventory`; Creative/Spectator flight is preserved, god mode is event-driven/restart-ephemeral, and clear inventory covers storage, armor, and offhand.
-- Added native `/anvil` while retaining vanilla anvil rules and costs.
-- Added transition-only synthetic leave/join presentation for native vanish with ordinary-player audience semantics, no fake Bukkit lifecycle events, no repeated broadcasts for unchanged state, and public `VanishStateChangeEvent` integration.
-- Kept PlexonChats as the preferred connection-message presentation authority; because its current public API has no synthetic connection renderer/broadcaster, 3.5.0 uses a configurable PlexonCore/MiniMessage fallback without depending on PlexonChats internals.
-- Added conditional Core capabilities for entity cleanup/spawn, player administration, flight/god/speed/inventory control, synthetic presence, and vanish events.
-- Preserved the existing `admin-data.yml` schema; optional god persistence was deliberately not introduced in 3.5.0.
-- Added focused regression coverage for entity selectors/protections/spawn limits, player control state, additive config compatibility, synthetic vanish audiences, and real transition-only behavior.
-- Updated Java 25 / Paper 26.2 CI and distribution verification for the 3.5.0 command/class boundary.
-- Added a hard stable-release runtime gate: publication requires committed real Paper 26.2/Java 25 smoke evidence before `v3.5.0` can be created.
+- Upgraded the exact runtime/compile/release boundary to PlexonCore 2.1.0 and moved Utility scheduling/I/O onto owner-scoped Core primitives.
+- Corrected AFK authority: automatic bypass now defaults false, incoming damage no longer resets AFK, async activity is serialized safely, and public `AfkState` / `afkState(UUID)` supports external consumers.
+- Locked the established rank-facing self permissions: `plexonutility.enderchest`, `plexonutility.fly`, `plexonutility.feed`, and `plexonutility.heal` default false; self `/fly` uses the progression node rather than a staff node.
+- Hardened Utility-owned Survival/Adventure flight with a durable PDC ownership marker and reconciliation on permission loss, reload/feature disable, quit, reconnect, and plugin shutdown without stripping Creative/Spectator or external flight.
+- Added formal config schema version 1 and recursive bundled-message schema migration. Candidate loading is side-effect-free; committed migrations use backups and transactional multi-file persistence.
+- Added runtime generation/rollback semantics and Core capability refresh so rejected reloads restore the previous accepted state instead of leaving mixed config/message/service generations.
+- Hardened `/killall` with exact UUID candidate plans, revalidation at execution, actor-specific one-shot confirmation, a default 10,000-candidate preview ceiling, and a dangerous bypass permission that is no longer inherited by the admin umbrella.
+- Added optional fail-closed WildStacker stack-aware cleanup; logical stack amounts are reported separately from Bukkit representative removals.
+- Bounded large cleanup and `/spawnmob` bursts through one Core-owned coordinator per operation (40 cleanup candidates/tick, 20 entity creations/tick) without per-entity task fan-out or chunk loading.
+- Preserved PlexonTravel ownership of root `/spawn`; PlexonUtility registers `/spawnmob` only and CI rejects an accidental Utility `/spawn`.
+- Hardened other-player `/clearinventory` confirmation with inventory fingerprint/revalidation while preserving 3.4 live `/invsee` edit semantics.
+- Upgraded `admin-data.yml` to schema 2 with pre-migration backup, prison world UUID + name fallback, revisioned/retryable observable persistence, recovery after later full-snapshot success, and bounded shutdown waiting.
+- Changed prison set/clear reporting to require durable persistence and moved prison teleports to `teleportAsync` with actor/target completion revalidation.
+- Added public `SyntheticPresencePresentationEvent` after `VanishStateChangeEvent`; external presenters such as future PlexonChats versions can handle synthetic presence without fake Bukkit join/quit events, with Utility fallback only when unhandled.
+- Added Utility module health publication for sticky runtime-generation failures, AdminDataStore degradation, and AFK coordinator state, plus expanded `/utilityadmin diagnostics`.
+- Expanded CI/regression coverage for permission descriptors, immutable cleanup plans, preview ceilings, batching, WildStacker fail-closed behavior, flight lifecycle, migrations, persistence retry/recovery/bounded close, prison async races, and presentation handoff.
+- Stable publication remains blocked until real Paper 26.2/Java 25 runtime evidence is recorded against the exact candidate JAR SHA-256.
 
 ## 3.4.0 — 2026-09-12
 

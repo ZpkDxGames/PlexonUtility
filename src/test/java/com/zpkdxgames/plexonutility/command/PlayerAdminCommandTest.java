@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,6 +35,36 @@ class PlayerAdminCommandTest {
 
         verify(players).setGameMode(actor, actor, GameMode.CREATIVE);
         verify(messages, never()).send(actor, "no-permission");
+    }
+
+    @Test void selfFlightUsesProgressionPermissionRatherThanAdminFly() {
+        Player actor = player("RankedPlayer");
+        when(actor.hasPermission("plexonutility.fly")).thenReturn(true);
+        when(actor.hasPermission("plexonutility.admin.fly")).thenReturn(false);
+        MessageService messages = mock(MessageService.class);
+        PlayerManagementService players = mock(PlayerManagementService.class);
+        when(players.canManageFlight(actor)).thenReturn(true);
+        when(players.toggleFlight(actor, actor)).thenReturn(true);
+        PlayerAdminCommand executor = new PlayerAdminCommand(PlayerAdminCommandTest::enabledConfig, messages, players);
+
+        executor.onCommand(actor, command("fly"), "fly", new String[0]);
+
+        verify(players).toggleFlight(actor, actor);
+        verify(messages, never()).send(actor, "no-permission");
+    }
+
+    @Test void selfFlightWithoutProgressionPermissionIsDeniedEvenWithLegacyAdminFly() {
+        Player actor = player("LegacyAdmin");
+        when(actor.hasPermission("plexonutility.fly")).thenReturn(false);
+        when(actor.hasPermission("plexonutility.admin.fly")).thenReturn(true);
+        MessageService messages = mock(MessageService.class);
+        PlayerManagementService players = mock(PlayerManagementService.class);
+        PlayerAdminCommand executor = new PlayerAdminCommand(PlayerAdminCommandTest::enabledConfig, messages, players);
+
+        executor.onCommand(actor, command("fly"), "fly", new String[0]);
+
+        verify(players, never()).toggleFlight(actor, actor);
+        verify(messages).send(actor, "no-permission");
     }
 
     @Test void targetingAnotherPlayerRequiresOthersPermission() {
@@ -54,6 +85,68 @@ class PlayerAdminCommandTest {
 
         verify(players, never()).setGameMode(actor, target, GameMode.CREATIVE);
         verify(messages).send(actor, "no-permission");
+    }
+
+    @Test void otherPlayerClearInventoryRequiresExplicitSecondCommand() {
+        Player actor = player("Staff");
+        Player target = player("Target");
+        when(actor.hasPermission("plexonutility.admin.clearinventory")).thenReturn(true);
+        when(actor.hasPermission("plexonutility.admin.clearinventory.others")).thenReturn(true);
+        when(target.isOnline()).thenReturn(true);
+        when(target.isConnected()).thenReturn(true);
+        MessageService messages = mock(MessageService.class);
+        PlayerManagementService players = mock(PlayerManagementService.class);
+        when(players.inventoryFingerprint(target)).thenReturn(12345);
+        when(players.occupiedStacks(target)).thenReturn(7);
+        when(players.clearInventory(actor, target)).thenReturn(7);
+        PlayerAdminCommand executor = new PlayerAdminCommand(PlayerAdminCommandTest::enabledConfig, messages, players);
+
+        try (MockedStatic<Bukkit> bukkit = org.mockito.Mockito.mockStatic(Bukkit.class)) {
+            bukkit.when(() -> Bukkit.getPlayerExact("Target")).thenReturn(target);
+            bukkit.when(() -> Bukkit.getPlayer(target.getUniqueId())).thenReturn(target);
+
+            executor.onCommand(actor, command("clearinventory"), "clearinventory", new String[] {"Target"});
+            verify(players, never()).clearInventory(actor, target);
+            verify(messages).send(actor, "admin-clearinventory-confirm",
+                    java.util.Map.of("player", "Target", "count", "7", "seconds", "15"));
+
+            executor.onCommand(actor, command("clearinventory"), "clearinventory", new String[] {"confirm"});
+        }
+
+        verify(players, times(1)).clearInventory(actor, target);
+        verify(messages).send(actor, "admin-clearinventory-success",
+                java.util.Map.of("player", "Target", "count", "7"));
+    }
+
+    @Test void changedTargetInventoryRequiresReconfirmationBeforeClear() {
+        Player actor = player("Staff");
+        Player target = player("Target");
+        when(actor.hasPermission("plexonutility.admin.clearinventory")).thenReturn(true);
+        when(actor.hasPermission("plexonutility.admin.clearinventory.others")).thenReturn(true);
+        when(target.isOnline()).thenReturn(true);
+        when(target.isConnected()).thenReturn(true);
+        MessageService messages = mock(MessageService.class);
+        PlayerManagementService players = mock(PlayerManagementService.class);
+        when(players.inventoryFingerprint(target)).thenReturn(100, 200, 200);
+        when(players.occupiedStacks(target)).thenReturn(4, 5);
+        when(players.clearInventory(actor, target)).thenReturn(5);
+        PlayerAdminCommand executor = new PlayerAdminCommand(PlayerAdminCommandTest::enabledConfig, messages, players);
+
+        try (MockedStatic<Bukkit> bukkit = org.mockito.Mockito.mockStatic(Bukkit.class)) {
+            bukkit.when(() -> Bukkit.getPlayerExact("Target")).thenReturn(target);
+            bukkit.when(() -> Bukkit.getPlayer(target.getUniqueId())).thenReturn(target);
+
+            executor.onCommand(actor, command("clearinventory"), "clearinventory", new String[] {"Target"});
+            executor.onCommand(actor, command("clearinventory"), "clearinventory", new String[] {"confirm"});
+
+            verify(players, never()).clearInventory(actor, target);
+            verify(messages).send(actor, "admin-clearinventory-changed",
+                    java.util.Map.of("player", "Target", "count", "5", "seconds", "15"));
+
+            executor.onCommand(actor, command("clearinventory"), "clearinventory", new String[] {"confirm"});
+        }
+
+        verify(players, times(1)).clearInventory(actor, target);
     }
 
     @Test void disabledCapabilityRejectsBeforeMutation() {

@@ -1,9 +1,13 @@
 package com.zpkdxgames.plexonutility.afk;
 
+import com.zpkdxgames.plexonutility.api.AfkState;
+
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 
 /**
@@ -20,6 +24,7 @@ public final class AfkTracker {
     private static final class State {
         private final AtomicLong lastActivityNanos;
         private final AtomicBoolean afk = new AtomicBoolean(false);
+        private final AtomicReference<AfkState.Reason> reason = new AtomicReference<>(AfkState.Reason.NONE);
 
         private State(long now) {
             this.lastActivityNanos = new AtomicLong(now);
@@ -57,6 +62,7 @@ public final class AfkTracker {
             boolean current = state.afk.get();
             boolean next = !current;
             if (state.afk.compareAndSet(current, next)) {
+                state.reason.set(next ? AfkState.Reason.MANUAL : AfkState.Reason.NONE);
                 return next ? Transition.TO_AFK : Transition.TO_ACTIVE;
             }
         }
@@ -65,7 +71,11 @@ public final class AfkTracker {
     public Transition activity(UUID playerId) {
         State state = state(playerId);
         state.lastActivityNanos.lazySet(clock.getAsLong());
-        return state.afk.compareAndSet(true, false) ? Transition.TO_ACTIVE : Transition.NONE;
+        if (state.afk.compareAndSet(true, false)) {
+            state.reason.set(AfkState.Reason.NONE);
+            return Transition.TO_ACTIVE;
+        }
+        return Transition.NONE;
     }
 
     public Transition evaluateTimeout(UUID playerId, long timeoutNanos, boolean bypass) {
@@ -74,7 +84,11 @@ public final class AfkTracker {
         if (state.afk.get()) return Transition.NONE;
         long elapsed = clock.getAsLong() - state.lastActivityNanos.get();
         if (elapsed < timeoutNanos) return Transition.NONE;
-        return state.afk.compareAndSet(false, true) ? Transition.TO_AFK : Transition.NONE;
+        if (state.afk.compareAndSet(false, true)) {
+            state.reason.set(AfkState.Reason.TIMEOUT);
+            return Transition.TO_AFK;
+        }
+        return Transition.NONE;
     }
 
     public boolean isAfk(UUID playerId) {
@@ -84,6 +98,18 @@ public final class AfkTracker {
 
     public boolean isTracked(UUID playerId) {
         return states.containsKey(playerId);
+    }
+
+    public AfkState snapshot(UUID playerId) {
+        State state = states.get(playerId);
+        if (state == null) return AfkState.untracked();
+        long elapsed = Math.max(0L, clock.getAsLong() - state.lastActivityNanos.get());
+        boolean afk = state.afk.get();
+        return new AfkState(
+                true,
+                afk,
+                afk ? state.reason.get() : AfkState.Reason.NONE,
+                Duration.ofNanos(elapsed));
     }
 
     public int trackedPlayers() {

@@ -333,21 +333,36 @@ public final class AdminMenuService {
         if (prison.location().isPresent()) {
             gui.confirmation(actor, "utility", "prison-set-confirm-3.3", items.render("<red><bold>Overwrite Prison?</bold></red>"),
                     prisonStatusIcon(prison.location()), confirmed -> {
-                        PrisonLocation set = prison.set(confirmed);
-                        messages.send(confirmed, "admin-prison-set", Map.of("world", set.world(), "coordinates", set.coordinates()));
-                        openPrison(confirmed);
+                        prison.set(confirmed).thenAccept(set -> {
+                            messages.send(confirmed, "admin-prison-set", Map.of(
+                                    "world", set.world(), "coordinates", set.coordinates()));
+                            openPrison(confirmed);
+                        }).exceptionally(error -> {
+                            messages.send(confirmed, "admin-prison-persistence-failed",
+                                    Map.of("reason", rootMessage(error)));
+                            openPrison(confirmed);
+                            return null;
+                        });
                     }, this::openPrison);
             return;
         }
-        PrisonLocation set = prison.set(actor);
-        messages.send(actor, "admin-prison-set", Map.of("world", set.world(), "coordinates", set.coordinates()));
-        openPrison(actor);
+        prison.set(actor).thenAccept(set -> {
+            messages.send(actor, "admin-prison-set", Map.of(
+                    "world", set.world(), "coordinates", set.coordinates()));
+            openPrison(actor);
+        }).exceptionally(error -> {
+            messages.send(actor, "admin-prison-persistence-failed", Map.of("reason", rootMessage(error)));
+            openPrison(actor);
+            return null;
+        });
     }
 
     private void gotoPrison(Player actor) {
         if (!require(actor, "plexonutility.admin.prison.goto")) return;
-        prisonFeedback(actor, prison.gotoPrison(actor), null);
-        openPrison(actor);
+        prison.gotoPrison(actor).thenAccept(result -> {
+            prisonFeedback(actor, result, null);
+            if (result != PrisonService.Result.ACTOR_OFFLINE) openPrison(actor);
+        });
     }
 
     private void clearPrison(Player actor) {
@@ -358,18 +373,26 @@ public final class AdminMenuService {
         }
         gui.confirmation(actor, "utility", "prison-clear-confirm-3.3", items.render("<red><bold>Clear Prison Location?</bold></red>"),
                 prisonStatusIcon(prison.location()), confirmed -> {
-                    prison.clear(confirmed);
-                    messages.send(confirmed, "admin-prison-cleared");
-                    openPrison(confirmed);
+                    prison.clear(confirmed).thenAccept(cleared -> {
+                        if (cleared) messages.send(confirmed, "admin-prison-cleared");
+                        else messages.send(confirmed, "admin-prison-not-configured");
+                        openPrison(confirmed);
+                    }).exceptionally(error -> {
+                        messages.send(confirmed, "admin-prison-persistence-failed",
+                                Map.of("reason", rootMessage(error)));
+                        openPrison(confirmed);
+                        return null;
+                    });
                 }, this::openPrison);
     }
 
     private void executePrisonSend(Player actor, Player target) {
         if (!requireFeature(actor, config.get().admin().prisonEnabled(), "plexonutility.admin.prison.send")) return;
-        PrisonService.Result result = prison.send(actor, target);
-        prisonFeedback(actor, result, target.getName());
-        if (result == PrisonService.Result.SUCCESS) openPlayerActions(actor, target.getUniqueId());
-        else openPrison(actor);
+        prison.send(actor, target).thenAccept(result -> {
+            prisonFeedback(actor, result, target.getName());
+            if (result == PrisonService.Result.SUCCESS) openPlayerActions(actor, target.getUniqueId());
+            else if (result != PrisonService.Result.ACTOR_OFFLINE) openPrison(actor);
+        });
     }
 
     private void openKickDialog(Player actor, Player target) {
@@ -500,8 +523,16 @@ public final class AdminMenuService {
             case NOT_CONFIGURED -> messages.send(actor, "admin-prison-not-configured");
             case WORLD_MISSING -> messages.send(actor, "admin-prison-world-missing");
             case TARGET_OFFLINE -> messages.send(actor, "admin-target-offline");
+            case ACTOR_OFFLINE -> { }
             case TELEPORT_FAILED -> messages.send(actor, "admin-prison-teleport-failed");
         }
+    }
+
+    private static String rootMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) current = current.getCause();
+        String message = current.getMessage();
+        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
     }
 
     private ItemStack adminProfile(Player player) {

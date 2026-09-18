@@ -1,5 +1,6 @@
 package com.zpkdxgames.plexonutility.admin.entity;
 
+import com.zpkdxgames.plexoncore.scheduler.CoreScheduler;
 import com.zpkdxgames.plexonutility.admin.AdminAuditService;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import org.bukkit.Location;
@@ -12,44 +13,78 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Tameable;
+import org.bukkit.plugin.java.JavaPlugin;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /** One-pass bounded entity cleanup with conservative protection defaults. */
 public final class EntityCleanupService {
+    static final int MAX_REMOVALS_PER_TICK = 40;
+    private static final Duration NEXT_BATCH_DELAY = Duration.ofMillis(50);
     private static final Set<EntityType> BOSSES = Set.of(EntityType.ENDER_DRAGON, EntityType.WITHER);
     private static final Set<EntityType> ALWAYS_PROTECTED = Set.of(
             EntityType.PLAYER, EntityType.INTERACTION, EntityType.MARKER);
 
+    private final JavaPlugin plugin;
+    private final CoreScheduler scheduler;
     private final Supplier<UtilityConfig> config;
     private final AdminAuditService audit;
+    private final WildStackerAdapter wildStacker;
 
-    public EntityCleanupService(Supplier<UtilityConfig> config, AdminAuditService audit) {
+    public EntityCleanupService(JavaPlugin plugin, CoreScheduler scheduler,
+                                Supplier<UtilityConfig> config, AdminAuditService audit) {
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.config = Objects.requireNonNull(config, "config");
         this.audit = Objects.requireNonNull(audit, "audit");
+        this.wildStacker = new WildStackerAdapter(plugin);
+    }
+
+    /** Compatibility constructor for unit tests/source callers. */
+    public EntityCleanupService(Supplier<UtilityConfig> config, AdminAuditService audit) {
+        this.plugin = null;
+        this.scheduler = null;
+        this.config = Objects.requireNonNull(config, "config");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.wildStacker = new WildStackerAdapter(null);
     }
 
     public Preview preview(Query query) {
+        return plan(query).preview();
+    }
+
+    public Plan plan(Query query) {
         int matched = 0;
         int protectedCount = 0;
+        int maxCandidates = config.get().admin().entityManagement().killall().maxCandidates();
+        Set<UUID> removable = new java.util.LinkedHashSet<>();
         for (Entity entity : candidates(query)) {
             if (!EntitySelector.matches(query.selection(), entity)) continue;
             matched++;
-            if (isProtected(query.selection(), entity)) protectedCount++;
+            if (matched > maxCandidates) throw new PlanLimitExceededException(maxCandidates, matched);
+            if (isProtected(query.selection(), entity)) {
+                protectedCount++;
+            } else {
+                removable.add(entity.getUniqueId());
+            }
         }
-        return new Preview(matched, protectedCount, Math.max(0, matched - protectedCount));
+        return new Plan(query, Set.copyOf(removable), matched, protectedCount);
     }
 
     public Result execute(CommandSender actor, Query query) {
         int matched = 0;
         int protectedCount = 0;
         int removed = 0;
+        int logicalRemoved = 0;
         for (Entity entity : candidates(query)) {
             if (!EntitySelector.matches(query.selection(), entity)) continue;
             matched++;
@@ -57,17 +92,141 @@ public final class EntityCleanupService {
                 protectedCount++;
                 continue;
             }
-            entity.remove();
+            WildStackerAdapter.Removal removal = removeEntity(entity);
+            if (!removal.removed()) {
+                protectedCount++;
+                continue;
+            }
             removed++;
+            logicalRemoved += removal.logicalAmount();
         }
         audit.log("KILLALL", actor,
                 "selector=" + query.selection().canonical()
                         + " world=" + query.world().getName()
                         + " scope=" + query.scopeDescription()
-                        + " removed=" + removed
+                        + " representativesRemoved=" + removed
+                        + " logicalRemoved=" + logicalRemoved
                         + " protected=" + protectedCount
-                        + " matched=" + matched);
-        return new Result(matched, protectedCount, removed);
+                        + " matched=" + matched
+                        + " wildStacker=" + wildStacker.active());
+        return new Result(matched, protectedCount, removed, logicalRemoved);
+    }
+
+    /**
+     * Executes only UUIDs captured by a prior plan. Every surviving candidate is revalidated
+     * immediately before removal; entities spawned after preview can never enter the operation.
+     */
+    public Result execute(CommandSender actor, Plan plan) {
+        Query query = plan.query();
+        int removed = 0;
+        int logicalRemoved = 0;
+        int newlyProtected = 0;
+        Set<UUID> remaining = new java.util.HashSet<>(plan.candidateIds());
+        for (Entity entity : candidates(query)) {
+            if (!remaining.remove(entity.getUniqueId())) continue;
+            if (!EntitySelector.matches(query.selection(), entity) || isProtected(query.selection(), entity)) {
+                newlyProtected++;
+                continue;
+            }
+            WildStackerAdapter.Removal removal = removeEntity(entity);
+            if (!removal.removed()) {
+                newlyProtected++;
+                continue;
+            }
+            removed++;
+            logicalRemoved += removal.logicalAmount();
+        }
+        int protectedCount = plan.protectedCount() + newlyProtected;
+        audit.log("KILLALL", actor,
+                "selector=" + query.selection().canonical()
+                        + " world=" + query.world().getName()
+                        + " scope=" + query.scopeDescription()
+                        + " planned=" + plan.candidateIds().size()
+                        + " representativesRemoved=" + removed
+                        + " logicalRemoved=" + logicalRemoved
+                        + " protected=" + protectedCount
+                        + " missing=" + remaining.size()
+                        + " wildStacker=" + wildStacker.active());
+        return new Result(plan.matched(), protectedCount, removed, logicalRemoved);
+    }
+
+    /**
+     * Executes a confirmed immutable plan with one Core-owned coordinator. Small plans remain
+     * immediate; larger plans process at most {@value MAX_REMOVALS_PER_TICK} candidates per tick.
+     */
+    public CompletableFuture<Result> executeBatched(CommandSender actor, Plan plan) {
+        if (plugin == null || scheduler == null || plan.candidateIds().size() <= MAX_REMOVALS_PER_TICK) {
+            return CompletableFuture.completedFuture(execute(actor, plan));
+        }
+        BatchState state = new BatchState(actor, plan, new ArrayList<>(plan.candidateIds()));
+        CompletableFuture<Result> result = new CompletableFuture<>();
+        runBatch(state, result);
+        return result;
+    }
+
+    private void runBatch(BatchState state, CompletableFuture<Result> result) {
+        if (result.isDone()) return;
+        if (plugin == null || !plugin.isEnabled()) {
+            result.completeExceptionally(new IllegalStateException("PlexonUtility disabled during cleanup batch"));
+            return;
+        }
+
+        int processed = 0;
+        while (processed < MAX_REMOVALS_PER_TICK && state.index < state.ids.size()) {
+            UUID id = state.ids.get(state.index++);
+            processed++;
+            Entity entity = state.plan.query().world().getEntity(id);
+            if (entity == null || !entity.isValid()) {
+                state.missing++;
+                continue;
+            }
+            if (!withinScope(state.plan.query(), entity)
+                    || !EntitySelector.matches(state.plan.query().selection(), entity)
+                    || isProtected(state.plan.query().selection(), entity)) {
+                state.newlyProtected++;
+                continue;
+            }
+            WildStackerAdapter.Removal removal = removeEntity(entity);
+            if (!removal.removed()) {
+                state.newlyProtected++;
+                continue;
+            }
+            state.removed++;
+            state.logicalRemoved += removal.logicalAmount();
+        }
+
+        if (state.index >= state.ids.size()) {
+            result.complete(finishBatch(state));
+            return;
+        }
+
+        CoreScheduler.ObservedTaskHandle next = scheduler.schedulePrimaryObserved(
+                plugin, NEXT_BATCH_DELAY, () -> runBatch(state, result));
+        next.completion().whenComplete((ignored, error) -> {
+            if (error != null && !result.isDone()) result.completeExceptionally(error);
+        });
+    }
+
+    private Result finishBatch(BatchState state) {
+        Query query = state.plan.query();
+        int protectedCount = state.plan.protectedCount() + state.newlyProtected;
+        audit.log("KILLALL", state.actor,
+                "selector=" + query.selection().canonical()
+                        + " world=" + query.world().getName()
+                        + " scope=" + query.scopeDescription()
+                        + " planned=" + state.plan.candidateIds().size()
+                        + " representativesRemoved=" + state.removed
+                        + " logicalRemoved=" + state.logicalRemoved
+                        + " protected=" + protectedCount
+                        + " missing=" + state.missing
+                        + " batched=true");
+        return new Result(state.plan.matched(), protectedCount, state.removed, state.logicalRemoved);
+    }
+
+    private static boolean withinScope(Query query, Entity entity) {
+        if (!entity.getWorld().equals(query.world())) return false;
+        if (query.radius() == null) return true;
+        return entity.getLocation().distanceSquared(query.center()) <= query.radius() * query.radius();
     }
 
     private Collection<Entity> candidates(Query query) {
@@ -91,7 +250,13 @@ public final class EntityCleanupService {
         if (policy.protectVillagers() && entity instanceof AbstractVillager) return true;
         if (policy.protectArmorStands() && entity instanceof ArmorStand) return true;
         if (policy.protectDisplays() && entity instanceof Display) return true;
-        return policy.protectPluginMetadata() && looksPluginOwned(entity);
+        if (policy.protectPluginMetadata() && looksPluginOwned(entity)) return true;
+        return wildStacker.inspect(entity).mode() == WildStackerAdapter.Mode.PROTECT;
+    }
+
+    private WildStackerAdapter.Removal removeEntity(Entity entity) {
+        WildStackerAdapter.Inspection inspection = wildStacker.inspect(entity);
+        return wildStacker.remove(entity, inspection);
     }
 
     private static boolean looksPluginOwned(Entity entity) {
@@ -122,5 +287,59 @@ public final class EntityCleanupService {
     }
 
     public record Preview(int matched, int protectedCount, int removable) { }
-    public record Result(int matched, int protectedCount, int removed) { }
+
+    public record Plan(Query query, Set<UUID> candidateIds, int matched, int protectedCount) {
+        public Plan {
+            Objects.requireNonNull(query, "query");
+            candidateIds = Set.copyOf(Objects.requireNonNull(candidateIds, "candidateIds"));
+            if (matched < 0 || protectedCount < 0 || protectedCount > matched) throw new IllegalArgumentException("counts");
+        }
+
+        public Preview preview() {
+            return new Preview(matched, protectedCount, candidateIds.size());
+        }
+    }
+
+    private static final class BatchState {
+        private final CommandSender actor;
+        private final Plan plan;
+        private final List<UUID> ids;
+        private int index;
+        private int removed;
+        private int logicalRemoved;
+        private int newlyProtected;
+        private int missing;
+
+        private BatchState(CommandSender actor, Plan plan, List<UUID> ids) {
+            this.actor = actor;
+            this.plan = plan;
+            this.ids = ids;
+        }
+    }
+
+    public static final class PlanLimitExceededException extends IllegalArgumentException {
+        private final int limit;
+        private final int observed;
+
+        public PlanLimitExceededException(int limit, int observed) {
+            super("cleanup candidate plan exceeded limit " + limit);
+            this.limit = limit;
+            this.observed = observed;
+        }
+
+        public int limit() { return limit; }
+        public int observed() { return observed; }
+    }
+
+    public record Result(int matched, int protectedCount, int removed, int logicalRemoved) {
+        public Result {
+            if (matched < 0 || protectedCount < 0 || removed < 0 || logicalRemoved < 0) {
+                throw new IllegalArgumentException("counts");
+            }
+        }
+
+        public Result(int matched, int protectedCount, int removed) {
+            this(matched, protectedCount, removed, removed);
+        }
+    }
 }

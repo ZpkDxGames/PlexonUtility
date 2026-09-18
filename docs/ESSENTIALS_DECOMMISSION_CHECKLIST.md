@@ -9,13 +9,13 @@ Status vocabulary: `REPLACED`, `NOT USED`, `KEEP EXTERNAL`, `DEFERRED — BLOCKS
 | Ender Chest | REPLACED | PlexonUtility native implementation + CI; online targets |
 | Workbench | REPLACED | PlexonUtility native implementation + CI |
 | Anvil | REPLACED | PlexonUtility 3.5 native Paper anvil surface |
-| AFK | REPLACED | PlexonUtility event-driven/shared scheduler implementation |
+| AFK | REPLACED | PlexonUtility event-driven state + one Core-owned timeout coordinator |
 | Gamemode | REPLACED | PlexonUtility 3.5 self/other permission split |
-| Fly | REPLACED | PlexonUtility 3.5 Survival/Adventure authority; Creative/Spectator preserved |
+| Fly | REPLACED | PlexonUtility 3.5 PDC-owned Survival/Adventure authority with permission/reconnect/reload cleanup; Creative/Spectator/external flight preserved |
 | God | REPLACED | PlexonUtility 3.5 event-driven, restart-ephemeral state |
 | Speed | REPLACED | PlexonUtility 3.5 validated 1–10/reset control |
 | Clear inventory | REPLACED | PlexonUtility 3.5 full-inventory clear + audit |
-| Entity cleanup | REPLACED | PlexonUtility 3.5 `/killall`; protected defaults and player exclusion |
+| Entity cleanup | REPLACED | PlexonUtility 3.5 `/killall`; immutable plans, protected defaults, player exclusion, bounded batching, optional WildStacker-aware removal |
 | Entity spawn | REPLACED | PlexonUtility 3.5 `/spawnmob`; absolute maximum 100 |
 | Self vanish | REPLACED | PlexonUtility native vanish + 3.5 transition-only synthetic presence |
 | Kick / profile ban / unban | REPLACED | PlexonUtility bounded native moderation |
@@ -31,7 +31,7 @@ Status vocabulary: `REPLACED`, `NOT USED`, `KEEP EXTERNAL`, `DEFERRED — BLOCKS
 | Broad moderation history/mute/freeze/IP bans/appeals | KEEP EXTERNAL | Requires dedicated moderation owner if used |
 | Vault economy provider | UNKNOWN — BLOCKS REMOVAL | **Critical:** identify provider and preserve balances |
 | Other plugin hard-dependencies | UNKNOWN — BLOCKS REMOVAL | Inspect installed plugin metadata/source |
-| PlexonUtility 3.5 real Paper smoke | DEFERRED — BLOCKS STABLE 3.5 PUBLICATION | Record `releases/3.5.0-runtime-smoke.txt` with PASS evidence before stable release workflow can publish |
+| PlexonUtility 3.5 real Paper smoke | DEFERRED — BLOCKS STABLE 3.5 PUBLICATION | Complete `docs/RUNTIME_CERTIFICATION_3.5.0.md`, then record exact-candidate PASS evidence in `releases/3.5.0-runtime-smoke.txt` |
 
 ## Production decision
 

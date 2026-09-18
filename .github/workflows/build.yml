@@ -24,20 +24,20 @@ jobs:
           java-version: '25'
           cache: maven
 
-      - name: Provision immutable PlexonCore 2.0.5
+      - name: Provision immutable PlexonCore 2.1.0
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${RUNNER_TEMP}/PlexonCore-2.0.5.jar"
+          core_jar="${RUNNER_TEMP}/PlexonCore-2.1.0.jar"
           curl --fail --location --silent --show-error \
             --output "$core_jar" \
-            "https://github.com/ZpkDxGames/PlexonCore/releases/download/v2.0.5/PlexonCore-2.0.5.jar"
-          echo "bf4df796e83571e76c06b296c75c5e73ddc8053cb2c587d74c08cd3922e0b4d4  $core_jar" | sha256sum --check
+            "https://github.com/ZpkDxGames/PlexonCore/releases/download/v2.1.0/PlexonCore-2.1.0.jar"
+          echo "7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c  $core_jar" | sha256sum --check
           mvn -B -ntp org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
             -Dfile="$core_jar" \
             -DgroupId=com.zpkdxgames \
             -DartifactId=PlexonCore \
-            -Dversion=2.0.5 \
+            -Dversion=2.1.0 \
             -Dpackaging=jar \
             -DgeneratePom=true
 
@@ -77,10 +77,13 @@ jobs:
           for class in \
             'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' \
             'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' \
+            'com/zpkdxgames/plexonutility/api/AfkState.class' \
             'com/zpkdxgames/plexonutility/api/event/AfkStateChangeEvent.class' \
             'com/zpkdxgames/plexonutility/api/event/VanishStateChangeEvent.class' \
+            'com/zpkdxgames/plexonutility/api/event/SyntheticPresencePresentationEvent.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntitySelector.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntityCleanupService.class' \
+            'com/zpkdxgames/plexonutility/admin/entity/WildStackerAdapter.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntitySpawnService.class' \
             'com/zpkdxgames/plexonutility/admin/gui/Admin350MenuService.class' \
             'com/zpkdxgames/plexonutility/admin/player/PlayerManagementService.class' \
@@ -96,6 +99,7 @@ jobs:
           grep -F "version: '${VERSION}'" target/plugin.yml
           grep -F "api-version: '26.2'" target/plugin.yml
           grep -F "plexonutility.admin.invsee.edit:" target/plugin.yml
+          grep -F "  - WildStacker" target/plugin.yml
           for command in utility utilityadmin invsee vanish kick ban unban prison trash afk killall spawnmob gamemode fly god speed clearinventory anvil; do
             grep -F "  ${command}:" target/plugin.yml
           done
@@ -117,7 +121,41 @@ jobs:
             fi
           done
           (cd target && sha256sum "PlexonUtility-${VERSION}.jar" > SHA256SUMS.txt && sha256sum --check SHA256SUMS.txt)
+          evidence="releases/${VERSION}-runtime-smoke.txt"
+          if [ -s "$evidence" ]; then
+            pinned_hash="$(sed -n 's/^candidate_jar_sha256=//p' "$evidence")"
+            if [ -n "$pinned_hash" ] && [ "$pinned_hash" != 'PENDING' ]; then
+              rebuilt_hash="$(sha256sum "$JAR" | awk '{print $1}')"
+              test "$rebuilt_hash" = "$pinned_hash"
+            fi
+          fi
           git diff --check
+
+      - name: Syntax-check stable release verification shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          source = Path(".github/workflows/release.yml").read_text(encoding="utf-8").splitlines()
+          marker = "      - name: Verify stable release and runtime boundaries"
+          start = source.index(marker)
+          run_line = next(i for i in range(start, len(source)) if source[i] == "        run: |")
+          body = []
+          for line in source[run_line + 1:]:
+              if line.startswith("      - name: "):
+                  break
+              if line.startswith("          "):
+                  body.append(line[10:])
+              elif line:
+                  raise SystemExit(f"Unexpected release-shell indentation: {line!r}")
+          script = "\n".join(body) + "\n"
+          script = re.sub(r"\$\{\{[^}]+\}\}", "deadbeef", script)
+          Path("target/release-gate-syntax.sh").write_text(script, encoding="utf-8")
+          PY
+          bash -n target/release-gate-syntax.sh
 
       - name: Upload verified artifact
         uses: actions/upload-artifact@v4

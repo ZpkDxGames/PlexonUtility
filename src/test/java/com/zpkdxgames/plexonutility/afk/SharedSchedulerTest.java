@@ -2,6 +2,8 @@ package com.zpkdxgames.plexonutility.afk;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,6 +28,26 @@ class SharedSchedulerTest {
         assertEquals(1, cancelled.get());
         assertEquals(1, scheduler.activeTaskCount());
         assertTrue(scheduler.running());
+    }
+
+    @Test
+    void completedCycleReschedulesExactlyOneCoordinator() {
+        List<Runnable> scheduledTasks = new ArrayList<>();
+        SharedScheduler scheduler = new SharedScheduler((period, task) -> {
+            scheduledTasks.add(task);
+            return () -> { };
+        });
+        AtomicInteger scans = new AtomicInteger();
+
+        scheduler.restart(20L, scans::incrementAndGet);
+        assertEquals(1, scheduledTasks.size());
+        assertEquals(1, scheduler.activeTaskCount());
+
+        scheduledTasks.get(0).run();
+
+        assertEquals(1, scans.get());
+        assertEquals(2, scheduledTasks.size());
+        assertEquals(1, scheduler.activeTaskCount());
     }
 
     @Test

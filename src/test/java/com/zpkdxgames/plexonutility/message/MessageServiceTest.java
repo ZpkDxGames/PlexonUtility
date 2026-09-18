@@ -3,58 +3,67 @@ package com.zpkdxgames.plexonutility.message;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageServiceTest {
     @Test
-    void acceptsCompleteStringCatalog() {
-        YamlConfiguration yaml = completeCatalog("custom");
-        assertDoesNotThrow(() -> MessageService.validateCatalog(yaml));
+    void bundledLeafStringsDefineTheSchemaIncludingNestedKeys() {
+        YamlConfiguration defaults = defaultsCatalog("default");
+
+        Set<String> keys = MessageService.requiredKeys(defaults);
+
+        assertEquals(Set.of("prefix", "nested.one", "nested.two"), keys);
     }
 
     @Test
-    void existingCatalogCopiesNewKeysFromBundledDefaults() {
-        YamlConfiguration existing = completeCatalog("existing");
-        existing.set("heal-unavailable", null);
-        YamlConfiguration defaults = completeCatalog("default");
+    void existingCatalogCopiesEveryMissingBundledLeafAndPreservesCustomValues() {
+        YamlConfiguration existing = new YamlConfiguration();
+        existing.set("prefix", "custom");
+        YamlConfiguration defaults = defaultsCatalog("default");
 
         int migrated = MessageService.applyDefaultsAndValidate(existing, defaults);
 
-        assertEquals(1, migrated);
-        assertEquals("default", existing.getString("heal-unavailable"));
-        assertEquals("existing", existing.getString("heal-self"));
-        assertEquals("default", existing.getValues(false).get("heal-unavailable"));
+        assertEquals(2, migrated);
+        assertEquals("custom", existing.getString("prefix"));
+        assertEquals("default", existing.getString("nested.one"));
+        assertEquals("default", existing.getString("nested.two"));
     }
 
     @Test
     void completeCatalogDoesNotReportMigration() {
-        YamlConfiguration existing = completeCatalog("existing");
-        YamlConfiguration defaults = completeCatalog("default");
+        YamlConfiguration existing = defaultsCatalog("existing");
+        YamlConfiguration defaults = defaultsCatalog("default");
 
         assertEquals(0, MessageService.applyDefaultsAndValidate(existing, defaults));
-        assertEquals("existing", existing.getString("afk-self-on"));
+        assertEquals("existing", existing.getString("nested.one"));
     }
 
     @Test
-    void rejectsMissingRequiredMessageWhenNoDefaultExists() {
-        YamlConfiguration yaml = completeCatalog("ok");
-        yaml.set("heal-unavailable", null);
-        assertThrows(IllegalArgumentException.class, () -> MessageService.validateCatalog(yaml));
+    void rejectsWrongMessageTypeEvenWhenBundledDefaultExists() {
+        YamlConfiguration existing = defaultsCatalog("custom");
+        existing.set("nested.one", 42);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> MessageService.applyDefaultsAndValidate(existing, defaultsCatalog("default")));
     }
 
     @Test
-    void rejectsWrongMessageTypeEvenWhenDefaultsExist() {
-        YamlConfiguration yaml = completeCatalog("custom");
-        yaml.set("cooldown", 42);
-        YamlConfiguration defaults = completeCatalog("default");
-        assertThrows(IllegalArgumentException.class, () -> MessageService.applyDefaultsAndValidate(yaml, defaults));
+    void acceptsCompleteStringCatalog() {
+        YamlConfiguration yaml = defaultsCatalog("custom");
+        assertDoesNotThrow(() -> MessageService.validateCatalog(yaml));
+        assertTrue(MessageService.requiredKeys(yaml).contains("nested.two"));
     }
 
-    private static YamlConfiguration completeCatalog(String value) {
+    private static YamlConfiguration defaultsCatalog(String value) {
         YamlConfiguration yaml = new YamlConfiguration();
-        for (String key : MessageService.REQUIRED_KEYS) yaml.set(key, value);
+        yaml.set("prefix", value);
+        yaml.set("nested.one", value);
+        yaml.set("nested.two", value);
         return yaml;
     }
 }

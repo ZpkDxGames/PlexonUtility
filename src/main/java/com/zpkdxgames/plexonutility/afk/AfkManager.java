@@ -1,6 +1,7 @@
 package com.zpkdxgames.plexonutility.afk;
 
 import com.zpkdxgames.plexoncore.scheduler.CoreScheduler;
+import com.zpkdxgames.plexonutility.api.AfkState;
 import com.zpkdxgames.plexonutility.api.event.AfkStateChangeEvent;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.feature.Feature;
@@ -24,8 +25,10 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -46,9 +49,10 @@ public final class AfkManager implements Listener, AutoCloseable {
         this.config = config;
         this.tracker = tracker;
         this.notifier = new AfkNotifier(config, feedback);
-        this.coreScheduler = coreScheduler;
+        this.coreScheduler = Objects.requireNonNull(coreScheduler, "coreScheduler");
         this.scheduler = new SharedScheduler((periodTicks, task) -> {
-            var handle = plugin.getServer().getScheduler().runTaskTimer(plugin, task, periodTicks, periodTicks);
+            Duration delay = Duration.ofMillis(Math.multiplyExact(periodTicks, 50L));
+            var handle = this.coreScheduler.schedulePrimary(plugin, delay, task);
             return handle::cancel;
         });
     }
@@ -87,6 +91,10 @@ public final class AfkManager implements Listener, AutoCloseable {
 
     public boolean isAfk(UUID playerId) {
         return tracker.isAfk(playerId);
+    }
+
+    public AfkState afkState(UUID playerId) {
+        return tracker.snapshot(playerId);
     }
 
     public int trackedPlayers() {
@@ -130,14 +138,11 @@ public final class AfkManager implements Listener, AutoCloseable {
 
     private void asyncActivity(Player player) {
         if (!config.get().enabled(Feature.AFK)) return;
-        AfkTracker.Transition transition = tracker.activity(player.getUniqueId());
-        if (transition != AfkTracker.Transition.NONE) {
-            coreScheduler.runPrimary(() -> {
-                if (plugin.isEnabled()) {
-                    notifyTransition(player, transition, AfkStateChangeEvent.Reason.ACTIVITY);
-                }
-            });
-        }
+        coreScheduler.runPrimary(plugin, () -> {
+            if (plugin.isEnabled() && player.isOnline()) {
+                activity(player);
+            }
+        });
     }
 
     private void notifyTransition(Player player, AfkTracker.Transition transition, AfkStateChangeEvent.Reason reason) {
@@ -205,8 +210,9 @@ public final class AfkManager implements Listener, AutoCloseable {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDamage(EntityDamageEvent event) {
         if (!config.get().afk().resetOnDamage()) return;
-        if (event.getEntity() instanceof Player player) activity(player);
-        if (event instanceof EntityDamageByEntityEvent byEntity && byEntity.getDamager() instanceof Player attacker) activity(attacker);
+        if (event instanceof EntityDamageByEntityEvent byEntity && byEntity.getDamager() instanceof Player attacker) {
+            activity(attacker);
+        }
     }
 
     static boolean meaningfulMovement(Location from, Location to) {

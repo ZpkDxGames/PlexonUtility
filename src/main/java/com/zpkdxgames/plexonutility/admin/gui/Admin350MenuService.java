@@ -299,7 +299,15 @@ public final class Admin350MenuService {
             }
             query = new EntityCleanupService.Query(selection, actor.getWorld(), actor.getLocation(), (double) radius);
         }
-        EntityCleanupService.Preview preview = cleanup.preview(query);
+        final EntityCleanupService.Plan plan;
+        try {
+            plan = cleanup.plan(query);
+        } catch (EntityCleanupService.PlanLimitExceededException exception) {
+            messages.send(actor, "admin-killall-too-large", Map.of("limit", Integer.toString(exception.limit())));
+            openEntityManagement(actor);
+            return;
+        }
+        EntityCleanupService.Preview preview = plan.preview();
         if (preview.removable() == 0) {
             messages.send(actor, "admin-killall-none", Map.of(
                     "matched", Integer.toString(preview.matched()),
@@ -314,19 +322,28 @@ public final class Admin350MenuService {
                 "",
                 "<red>This action is destructive.</red>"));
         gui.confirmation(actor, "utility", "killall-confirm-3.5", items.render("<red><bold>Confirm Cleanup</bold></red>"), subject,
-                confirmed -> executeCleanup(confirmed, query), this::openEntityManagement);
+                confirmed -> executeCleanup(confirmed, plan), this::openEntityManagement);
     }
 
-    private void executeCleanup(Player actor, EntityCleanupService.Query query) {
+    private void executeCleanup(Player actor, EntityCleanupService.Plan plan) {
         if (!requireFeature(actor, config.get().admin().entityManagement().enabled()
                 && config.get().admin().entityManagement().killall().enabled(), "plexonutility.admin.killall")) return;
-        EntityCleanupService.Result result = cleanup.execute(actor, query);
-        messages.send(actor, "admin-killall-success", Map.of(
-                "count", Integer.toString(result.removed()),
-                "protected", Integer.toString(result.protectedCount()),
-                "selector", query.selection().canonical(),
-                "world", query.world().getName()));
-        openEntityManagement(actor);
+        EntityCleanupService.Query query = plan.query();
+        cleanup.executeBatched(actor, plan).whenComplete((result, error) ->
+                scheduler.runPrimary(() -> {
+                    if (!actor.isOnline() || !actor.isConnected()) return;
+                    if (error != null) {
+                        messages.send(actor, "admin-killall-confirm-expired");
+                        openEntityManagement(actor);
+                        return;
+                    }
+                    messages.send(actor, "admin-killall-success", Map.of(
+                            "count", Integer.toString(result.logicalRemoved()),
+                            "protected", Integer.toString(result.protectedCount()),
+                            "selector", query.selection().canonical(),
+                            "world", query.world().getName()));
+                    openEntityManagement(actor);
+                }));
     }
 
     private void openSpawnDialog(Player actor) {
@@ -373,18 +390,32 @@ public final class Admin350MenuService {
             messages.send(actor, "admin-spawnmob-invalid-amount", Map.of("amount", Integer.toString(amount), "max", Integer.toString(max)));
             return;
         }
-        EntitySpawnService.SpawnResult result = spawning.spawn(actor, actor, type, amount);
-        if (result.location() == null) {
-            messages.send(actor, "admin-spawnmob-no-safe-location");
-        } else if (result.failed() > 0) {
-            messages.send(actor, "admin-spawnmob-partial", Map.of(
-                    "spawned", Integer.toString(result.spawned()), "requested", Integer.toString(result.requested()),
-                    "failed", Integer.toString(result.failed()), "type", type.name().toLowerCase(Locale.ROOT)));
-        } else {
-            messages.send(actor, "admin-spawnmob-success", Map.of(
-                    "count", Integer.toString(result.spawned()), "type", type.name().toLowerCase(Locale.ROOT)));
-        }
-        openEntityManagement(actor);
+        spawning.spawnBatched(actor, actor, type, amount).whenComplete((result, error) ->
+                scheduler.runPrimary(() -> {
+                    if (!actor.isOnline() || !actor.isConnected()) return;
+                    if (error != null) {
+                        messages.send(actor, "admin-spawnmob-partial", Map.of(
+                                "spawned", "0", "requested", Integer.toString(amount),
+                                "failed", Integer.toString(amount),
+                                "type", type.name().toLowerCase(Locale.ROOT)));
+                        openEntityManagement(actor);
+                        return;
+                    }
+                    if (result.location() == null) {
+                        messages.send(actor, "admin-spawnmob-no-safe-location");
+                    } else if (result.failed() > 0) {
+                        messages.send(actor, "admin-spawnmob-partial", Map.of(
+                                "spawned", Integer.toString(result.spawned()),
+                                "requested", Integer.toString(result.requested()),
+                                "failed", Integer.toString(result.failed()),
+                                "type", type.name().toLowerCase(Locale.ROOT)));
+                    } else {
+                        messages.send(actor, "admin-spawnmob-success", Map.of(
+                                "count", Integer.toString(result.spawned()),
+                                "type", type.name().toLowerCase(Locale.ROOT)));
+                    }
+                    openEntityManagement(actor);
+                }));
     }
 
     private void setGameMode(Player actor, UUID targetId, GameMode mode) {
@@ -531,6 +562,7 @@ public final class Admin350MenuService {
         return items.icon(Material.COMPARATOR, "<aqua><bold>Safety Policy</bold></aqua>", List.of(
                 "<gray>Max cleanup radius:</gray> <white>" + entity.killall().maxRadius() + "</white>",
                 "<gray>Command confirm threshold:</gray> <white>" + entity.killall().confirmationThreshold() + "</white>",
+                "<gray>Max cleanup candidates:</gray> <white>" + entity.killall().maxCandidates() + "</white>",
                 "<gray>Max spawn batch:</gray> <white>" + entity.spawnmob().maxAmount() + "</white>",
                 "",
                 "<dark_gray>GUI cleanup always requires confirmation.</dark_gray>"));

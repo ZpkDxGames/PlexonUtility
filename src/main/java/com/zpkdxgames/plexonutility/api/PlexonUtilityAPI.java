@@ -13,6 +13,12 @@ public interface PlexonUtilityAPI {
     /** Returns the current ephemeral AFK state for an online/tracked player. */
     default boolean isAfk(UUID playerId) { return false; }
 
+    /**
+     * Returns a stable AFK snapshot. Offline/untracked players return
+     * {@link AfkState#untracked()} rather than exposing implementation clock state.
+     */
+    default AfkState afkState(UUID playerId) { return AfkState.untracked(); }
+
     /** Returns the current native PlexonUtility vanish state when the admin toolkit is active. */
     default boolean isVanished(UUID playerId) { return false; }
 

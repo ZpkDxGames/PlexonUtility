@@ -37,7 +37,7 @@ public final class EntityAdminCommand implements TabExecutor {
     private final MessageService messages;
     private final EntityCleanupService cleanup;
     private final EntitySpawnService spawning;
-    private final TimedConfirmationStore<EntityCleanupService.Query> pending =
+    private final TimedConfirmationStore<EntityCleanupService.Plan> pending =
             new TimedConfirmationStore<>(CONFIRM_TTL_NANOS, System::nanoTime);
 
     public EntityAdminCommand(Supplier<UtilityConfig> config, MessageService messages,
@@ -78,7 +78,14 @@ public final class EntityAdminCommand implements TabExecutor {
 
         EntityCleanupService.Query query = query(sender, selection, args);
         if (query == null) return true;
-        EntityCleanupService.Preview preview = cleanup.preview(query);
+        final EntityCleanupService.Plan plan;
+        try {
+            plan = cleanup.plan(query);
+        } catch (EntityCleanupService.PlanLimitExceededException exception) {
+            messages.send(sender, "admin-killall-too-large", Map.of("limit", Integer.toString(exception.limit())));
+            return true;
+        }
+        EntityCleanupService.Preview preview = plan.preview();
         if (preview.removable() == 0) {
             messages.send(sender, "admin-killall-none", Map.of(
                     "matched", Integer.toString(preview.matched()),
@@ -88,22 +95,22 @@ public final class EntityAdminCommand implements TabExecutor {
 
         int threshold = entity.killall().confirmationThreshold();
         if (preview.removable() >= threshold && !sender.hasPermission("plexonutility.admin.killall.bypass-confirm")) {
-            pending.put(actorKey(sender), query);
+            pending.put(actorKey(sender), plan);
             messages.send(sender, "admin-killall-confirm", Map.of(
                     "count", Integer.toString(preview.removable()), "seconds", "15"));
             return true;
         }
-        sendCleanupResult(sender, query, cleanup.execute(sender, query));
+        executeCleanup(sender, plan);
         return true;
     }
 
     private boolean confirm(CommandSender sender) {
-        EntityCleanupService.Query query = pending.consume(actorKey(sender)).orElse(null);
-        if (query == null) {
+        EntityCleanupService.Plan plan = pending.consume(actorKey(sender)).orElse(null);
+        if (plan == null) {
             messages.send(sender, "admin-killall-confirm-expired");
             return true;
         }
-        sendCleanupResult(sender, query, cleanup.execute(sender, query));
+        executeCleanup(sender, plan);
         return true;
     }
 
@@ -154,9 +161,19 @@ public final class EntityAdminCommand implements TabExecutor {
         return new EntityCleanupService.Query(selection, player.getWorld(), player.getLocation(), (double) radius);
     }
 
+    private void executeCleanup(CommandSender sender, EntityCleanupService.Plan plan) {
+        cleanup.executeBatched(sender, plan).whenComplete((result, error) -> {
+            if (error != null) {
+                messages.send(sender, "admin-killall-confirm-expired");
+                return;
+            }
+            sendCleanupResult(sender, plan.query(), result);
+        });
+    }
+
     private void sendCleanupResult(CommandSender sender, EntityCleanupService.Query query, EntityCleanupService.Result result) {
         messages.send(sender, "admin-killall-success", Map.of(
-                "count", Integer.toString(result.removed()),
+                "count", Integer.toString(result.logicalRemoved()),
                 "protected", Integer.toString(result.protectedCount()),
                 "selector", query.selection().canonical(),
                 "world", query.world().getName()));
@@ -196,7 +213,22 @@ public final class EntityAdminCommand implements TabExecutor {
             return true;
         }
 
-        EntitySpawnService.SpawnResult result = spawning.spawn(sender, player, type, amount);
+        final EntityType requestedType = type;
+        final int requestedAmount = amount;
+        spawning.spawnBatched(sender, player, requestedType, requestedAmount).whenComplete((result, error) -> {
+            if (error != null) {
+                messages.send(sender, "admin-spawnmob-partial", Map.of(
+                        "spawned", "0", "requested", Integer.toString(requestedAmount),
+                        "failed", Integer.toString(requestedAmount),
+                        "type", requestedType.name().toLowerCase(Locale.ROOT)));
+                return;
+            }
+            sendSpawnResult(sender, requestedType, result);
+        });
+        return true;
+    }
+
+    private void sendSpawnResult(CommandSender sender, EntityType type, EntitySpawnService.SpawnResult result) {
         if (result.location() == null) {
             messages.send(sender, "admin-spawnmob-no-safe-location");
         } else if (result.failed() > 0) {
@@ -210,7 +242,6 @@ public final class EntityAdminCommand implements TabExecutor {
                     "count", Integer.toString(result.spawned()),
                     "type", type.name().toLowerCase(Locale.ROOT)));
         }
-        return true;
     }
 
     @Override
