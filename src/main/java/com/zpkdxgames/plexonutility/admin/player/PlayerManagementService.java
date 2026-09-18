@@ -249,12 +249,17 @@ public final class PlayerManagementService implements Listener {
                 managedFlight.remove(id);
                 continue;
             }
-            if (!canManageFlight(player)) {
-                releaseOwnership(player);
-                continue;
-            }
-            if (!flightAuthorized(player)) revokeOwnedFlight(player, player, "permission-or-feature-loss");
+            reconcileFlight(player);
         }
+    }
+
+    void reconcileFlight(Player player) {
+        if (!ownsFlight(player)) return;
+        if (!canManageFlight(player)) {
+            releaseOwnership(player);
+            return;
+        }
+        if (!flightAuthorized(player)) revokeOwnedFlight(player, player, "permission-or-feature-loss");
     }
 
     private boolean flightFeatureEnabled() {
