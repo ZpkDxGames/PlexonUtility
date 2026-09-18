@@ -22,7 +22,7 @@ meaningful event
 Automatic timeout path:
 
 ```text
-one shared repeating task
+one shared Core-owned self-rescheduling coordinator
   -> every afk.auto-timeout.scan-interval-seconds
   -> iterate online players once
   -> skip plexonutility.afk.auto.bypass
@@ -45,13 +45,13 @@ A future optional Core facility could expose aggregated/coarsened player activit
 | Event | Purpose | Cost before state update |
 |---|---|---|
 | `PlayerMoveEvent` | meaningful movement | config boolean + world/block-coordinate comparison; yaw/pitch-only and same-block movement return immediately |
-| `AsyncChatEvent` | chat activity | config boolean + atomic state update; main-thread task is created only when an AFK player transitions ACTIVE |
+| `AsyncChatEvent` | chat activity | config boolean + owner-scoped Core primary dispatch before state mutation/observable transition |
 | `PlayerCommandPreprocessEvent` | command activity | config boolean + small `/afk` exclusion check |
 | `PlayerInteractEvent` | block/air interaction | config boolean + atomic state update |
 | `PlayerInteractEntityEvent` | entity interaction | config boolean + atomic state update |
 | `InventoryClickEvent` | inventory activity | config boolean + player type check + atomic state update |
 | `BlockBreakEvent` / `BlockPlaceEvent` | committed block changes | config boolean + atomic state update |
-| `EntityDamageEvent` | received/dealt combat damage | config boolean + player checks + atomic state update |
+| `EntityDamageEvent` | outgoing player-caused damage only | config boolean + attacker check + atomic state update; incoming damage does not reset AFK |
 | join / quit | initialize/remove ephemeral state | one map mutation |
 
 No listener performs database or filesystem I/O.
@@ -72,7 +72,7 @@ No listener performs database or filesystem I/O.
 ## Permissions
 
 - `plexonutility.afk` — manual toggle, default true.
-- `plexonutility.afk.auto.bypass` — bypass automatic timeout, default op.
+- `plexonutility.afk.auto.bypass` — bypass automatic timeout, default false; only explicit grants bypass the scanner.
 
 Historical `essentials.afk` may be migrated to `plexonutility.afk` only after the operator verifies the old node exists in the LuckPerms export.
 
@@ -100,7 +100,7 @@ afk:
     afk: ' <gray>[AFK]</gray>'
 ```
 
-Existing PlexonUtility configs inherit these parser defaults. On deployment, Bukkit's default-copy migration adds missing bundled keys while preserving configured values.
+Existing PlexonUtility configs inherit these parser defaults through the formal schema migration. Candidate preparation is side-effect-free; missing bundled values are persisted only after a successful runtime-generation commit.
 
 ## PlaceholderAPI
 
@@ -153,20 +153,20 @@ For the current TAB nickname comparison, the safe no-nickname cutover is to use 
 
 ## Public API
 
-`PlexonUtilityAPI#isAfk(UUID)` provides a minimal read-only AFK contract for future PlexonChats presentation. PlexonChats remains non-authoritative and requires no application change in this implementation.
+`PlexonUtilityAPI#isAfk(UUID)` remains compatible. `PlexonUtilityAPI#afkState(UUID)` additionally exposes the stable `AfkState` contract (active state, MANUAL/TIMEOUT/NONE reason, and activity-age semantics) for future consumers such as PlexonQuests. Raw `System.nanoTime()` values are not exposed.
 
 ## Runtime validation plan
 
 Before the Essentials expansion is removed:
 
 1. install the future approved PlexonUtility build in staging/production maintenance window;
-2. confirm startup reports AFK enabled and exactly one AFK shared scheduler;
+2. confirm startup reports AFK enabled and exactly one Core-owned AFK coordinator;
 3. confirm PlaceholderAPI registers `plexonutility`;
 4. test `%plexonutility_afk%` and `%plexonutility_is_afk%` ACTIVE state;
 5. run `/afk` and verify AFK state and optional public announcement;
 6. perform same-block yaw/pitch movement and verify it does not cause expensive AFK churn;
 7. cross a block boundary and verify AFK clears;
-8. test chat, non-AFK command, interaction, block change and damage resets;
+8. test chat, non-AFK command, interaction, block change and outgoing-damage resets; confirm incoming damage does not reset AFK;
 9. verify `/afk` itself toggles AFK -> ACTIVE correctly;
 10. grant `plexonutility.afk.auto.bypass` to a test identity and verify no automatic timeout;
 11. remove bypass and verify automatic timeout after configured period;
