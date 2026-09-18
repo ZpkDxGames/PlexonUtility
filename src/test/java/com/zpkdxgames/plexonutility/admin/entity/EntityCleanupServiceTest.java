@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -105,6 +106,29 @@ class EntityCleanupServiceTest {
         verify(late, never()).remove();
     }
 
+    @Test void oversizedPreviewPlanFailsClosedAtConfiguredCeiling() {
+        World world = mock(World.class);
+        Monster first = mock(Monster.class);
+        entity(first, EntityType.ZOMBIE);
+        Monster second = mock(Monster.class);
+        entity(second, EntityType.ZOMBIE);
+        when(world.getEntities()).thenReturn(List.of(first, second));
+
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("admin.entity-management.killall.max-candidates", 1);
+        EntityCleanupService service = service(yaml);
+        EntityCleanupService.Query query =
+                new EntityCleanupService.Query(EntitySelector.parse("zombie"), world, null, null);
+
+        EntityCleanupService.PlanLimitExceededException error = assertThrows(
+                EntityCleanupService.PlanLimitExceededException.class, () -> service.plan(query));
+
+        assertEquals(1, error.limit());
+        assertEquals(2, error.observed());
+        verify(first, never()).remove();
+        verify(second, never()).remove();
+    }
+
     @Test void radiusUsesSphericalFilteringInsideConfiguredWorld() {
         World world = mock(World.class);
         when(world.getName()).thenReturn("Survival_World");
@@ -127,7 +151,11 @@ class EntityCleanupServiceTest {
     }
 
     private static EntityCleanupService service() {
-        UtilityConfig config = UtilityConfig.from(new YamlConfiguration());
+        return service(new YamlConfiguration());
+    }
+
+    private static EntityCleanupService service(YamlConfiguration yaml) {
+        UtilityConfig config = UtilityConfig.from(yaml);
         return new EntityCleanupService(() -> config, mock(AdminAuditService.class));
     }
 
