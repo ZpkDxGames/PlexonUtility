@@ -114,7 +114,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             EntityCleanupService entityCleanup = new EntityCleanupService(this::utilityConfig, audit);
             EntitySpawnService entitySpawn = new EntitySpawnService(this::utilityConfig, audit);
             ModerationService moderation = new ModerationService(messages, audit);
-            PrisonService prison = new PrisonService(this, adminData, audit);
+            PrisonService prison = new PrisonService(this, adminData, audit, core.scheduler());
             InventoryInspectionService inventory = new InventoryInspectionService(core.gui(), utilityMenu.itemFactory(), messages);
             AdminMenuService adminMenu = new AdminMenuService(
                     this, this::utilityConfig, messages, core.gui(), core.scheduler(), utilityMenu.itemFactory(),
