@@ -145,6 +145,7 @@ public record UtilityConfig(
             boolean enabled,
             int maxRadius,
             int confirmationThreshold,
+            int maxCandidates,
             boolean protectNamed,
             boolean protectTamed,
             boolean protectVillagers,
@@ -159,10 +160,13 @@ public record UtilityConfig(
             if (confirmationThreshold < 1 || confirmationThreshold > 100_000) {
                 throw new IllegalArgumentException("admin.entity-management.killall.confirmation-threshold must be from 1 to 100000");
             }
+            if (maxCandidates < 1 || maxCandidates > 100_000) {
+                throw new IllegalArgumentException("admin.entity-management.killall.max-candidates must be from 1 to 100000");
+            }
         }
 
         public static KillAllConfig defaults() {
-            return new KillAllConfig(true, 512, 250, true, true, true, true, true, true);
+            return new KillAllConfig(true, 512, 250, 10_000, true, true, true, true, true, true);
         }
     }
 
@@ -351,6 +355,7 @@ public record UtilityConfig(
                 readBoolean(config, "admin.entity-management.killall.enabled", true),
                 readInt(config, "admin.entity-management.killall.max-radius", 512, 1, 4_096),
                 readInt(config, "admin.entity-management.killall.confirmation-threshold", 250, 1, 100_000),
+                readInt(config, "admin.entity-management.killall.max-candidates", 10_000, 1, 100_000),
                 readBoolean(config, "admin.entity-management.killall.protect.named", true),
                 readBoolean(config, "admin.entity-management.killall.protect.tamed", true),
                 readBoolean(config, "admin.entity-management.killall.protect.villagers", true),
