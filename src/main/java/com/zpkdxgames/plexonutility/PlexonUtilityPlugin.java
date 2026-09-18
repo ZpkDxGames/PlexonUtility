@@ -111,7 +111,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             SyntheticPresenceBridge syntheticPresence = new SyntheticPresenceBridge(this, this::utilityConfig, core.text());
             vanishService = new VanishService(this, this::utilityConfig, adminData, audit, syntheticPresence);
             playerManagement = new PlayerManagementService(this, this::utilityConfig, audit, core.scheduler());
-            EntityCleanupService entityCleanup = new EntityCleanupService(this::utilityConfig, audit);
+            EntityCleanupService entityCleanup = new EntityCleanupService(this, core.scheduler(), this::utilityConfig, audit);
             EntitySpawnService entitySpawn = new EntitySpawnService(this, core.scheduler(), this::utilityConfig, audit);
             ModerationService moderation = new ModerationService(messages, audit);
             PrisonService prison = new PrisonService(this, adminData, audit, core.scheduler());
