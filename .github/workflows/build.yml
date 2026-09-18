@@ -83,6 +83,7 @@ jobs:
             'com/zpkdxgames/plexonutility/api/event/SyntheticPresencePresentationEvent.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntitySelector.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntityCleanupService.class' \
+            'com/zpkdxgames/plexonutility/admin/entity/WildStackerAdapter.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntitySpawnService.class' \
             'com/zpkdxgames/plexonutility/admin/gui/Admin350MenuService.class' \
             'com/zpkdxgames/plexonutility/admin/player/PlayerManagementService.class' \
@@ -98,6 +99,7 @@ jobs:
           grep -F "version: '${VERSION}'" target/plugin.yml
           grep -F "api-version: '26.2'" target/plugin.yml
           grep -F "plexonutility.admin.invsee.edit:" target/plugin.yml
+          grep -F "  - WildStacker" target/plugin.yml
           for command in utility utilityadmin invsee vanish kick ban unban prison trash afk killall spawnmob gamemode fly god speed clearinventory anvil; do
             grep -F "  ${command}:" target/plugin.yml
           done
