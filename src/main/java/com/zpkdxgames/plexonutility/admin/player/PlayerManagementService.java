@@ -1,42 +1,78 @@
 package com.zpkdxgames.plexonutility.admin.player;
 
+import com.zpkdxgames.plexoncore.scheduler.CoreScheduler;
 import com.zpkdxgames.plexonutility.admin.AdminAuditService;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import org.bukkit.GameMode;
+import org.bukkit.NamespacedKey;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.java.JavaPlugin;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-/** Event-driven player administration state. God mode is intentionally restart-ephemeral in 3.5. */
+/**
+ * Event-driven player administration state.
+ *
+ * <p>God mode remains restart-ephemeral. Survival/Adventure flight is explicitly owned by
+ * PlexonUtility and marked in player PDC so reconnect after an unclean stop can safely reconcile
+ * only flight that Utility actually granted.</p>
+ */
 public final class PlayerManagementService implements Listener {
     public static final float DEFAULT_WALK_SPEED = 0.2F;
     public static final float DEFAULT_FLY_SPEED = 0.1F;
+    private static final Duration FLIGHT_RECONCILE_PERIOD = Duration.ofSeconds(5);
 
+    private final JavaPlugin plugin;
     private final Supplier<UtilityConfig> config;
     private final AdminAuditService audit;
+    private final CoreScheduler scheduler;
+    private final NamespacedKey flightOwnerKey;
     private final Set<UUID> godMode = ConcurrentHashMap.newKeySet();
     private final Set<UUID> managedFlight = ConcurrentHashMap.newKeySet();
+    private CoreScheduler.TaskHandle flightReconcileTask;
 
-    public PlayerManagementService(Supplier<UtilityConfig> config, AdminAuditService audit) {
+    /** Production constructor with durable ownership and Core 2.1 owner-scoped reconciliation. */
+    public PlayerManagementService(JavaPlugin plugin, Supplier<UtilityConfig> config,
+                                   AdminAuditService audit, CoreScheduler scheduler) {
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.config = Objects.requireNonNull(config, "config");
         this.audit = Objects.requireNonNull(audit, "audit");
+        this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
+        this.flightOwnerKey = new NamespacedKey(plugin, "managed_flight");
+    }
+
+    /** Test/source compatibility constructor. PDC/scheduled reconciliation are unavailable. */
+    public PlayerManagementService(Supplier<UtilityConfig> config, AdminAuditService audit) {
+        this.plugin = null;
+        this.config = Objects.requireNonNull(config, "config");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.scheduler = null;
+        this.flightOwnerKey = null;
+    }
+
+    public synchronized void start() {
+        reconcileOwnedFlight();
+        refreshFlightReconciliation();
     }
 
     public void setGameMode(CommandSender actor, Player target, GameMode mode) {
         target.setGameMode(Objects.requireNonNull(mode, "mode"));
-        if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) managedFlight.remove(target.getUniqueId());
+        if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) releaseOwnership(target);
         audit.log("GAMEMODE", actor, target, "mode=" + mode.name());
     }
 
@@ -45,25 +81,35 @@ public final class PlayerManagementService implements Listener {
         return mode != GameMode.CREATIVE && mode != GameMode.SPECTATOR;
     }
 
-    public boolean isFlightManaged(UUID playerId) { return managedFlight.contains(playerId); }
+    public boolean isFlightManaged(UUID playerId) {
+        return managedFlight.contains(playerId);
+    }
 
     public boolean setFlight(CommandSender actor, Player target, boolean enabled) {
-        if (!canManageFlight(target)) return target.getAllowFlight();
-        UUID id = target.getUniqueId();
-        boolean changed = enabled ? managedFlight.add(id) : managedFlight.remove(id);
-        if (enabled) {
-            target.setAllowFlight(true);
-        } else if (changed) {
-            if (target.isFlying()) target.setFlying(false);
-            target.setAllowFlight(false);
-            target.setFallDistance(0.0F);
+        if (!canManageFlight(target)) {
+            releaseOwnership(target);
+            return target.getAllowFlight();
         }
-        if (changed) audit.log(enabled ? "FLY_ON" : "FLY_OFF", actor, target, "state=" + enabled);
-        return enabled;
+
+        if (enabled) {
+            if (!ownsFlight(target) && target.getAllowFlight()) {
+                // Another system already owns this permission. Never claim or later revoke it.
+                return true;
+            }
+            boolean changed = managedFlight.add(target.getUniqueId());
+            markOwned(target);
+            target.setAllowFlight(true);
+            if (changed) audit.log("FLY_ON", actor, target, "state=true");
+            return true;
+        }
+
+        if (!ownsFlight(target)) return target.getAllowFlight();
+        revokeOwnedFlight(target, actor, "explicit-disable");
+        return false;
     }
 
     public boolean toggleFlight(CommandSender actor, Player target) {
-        return setFlight(actor, target, !managedFlight.contains(target.getUniqueId()));
+        return setFlight(actor, target, !ownsFlight(target));
     }
 
     public boolean isGodMode(UUID playerId) { return godMode.contains(playerId); }
@@ -121,13 +167,20 @@ public final class PlayerManagementService implements Listener {
         return cleared;
     }
 
-    public void reload() {
+    public synchronized void reload() {
         UtilityConfig.AdminConfig admin = config.get().admin();
         if (!admin.enabled() || !admin.playerManagement().godEnabled()) godMode.clear();
-        if (!admin.enabled() || !admin.playerManagement().flyEnabled()) managedFlight.clear();
+        reconcileOwnedFlight();
+        refreshFlightReconciliation();
     }
 
-    public void close() {
+    public synchronized void close() {
+        stopFlightReconciliation();
+        if (plugin != null && plugin.getServer() != null) {
+            for (Player player : plugin.getServer().getOnlinePlayers()) {
+                if (ownsFlight(player)) revokeOwnedFlight(player, player, "plugin-disable");
+            }
+        }
         godMode.clear();
         managedFlight.clear();
     }
@@ -140,11 +193,108 @@ public final class PlayerManagementService implements Listener {
         event.setCancelled(true);
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (!hasOwnershipMarker(player)) return;
+
+        if (!canManageFlight(player)) {
+            releaseOwnership(player);
+            return;
+        }
+
+        if (flightAuthorized(player)) {
+            managedFlight.add(player.getUniqueId());
+            player.setAllowFlight(true);
+        } else {
+            revokeOwnedFlight(player, player, "join-unauthorized");
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
-        UUID id = event.getPlayer().getUniqueId();
-        managedFlight.remove(id);
-        godMode.remove(id);
+        Player player = event.getPlayer();
+        if (ownsFlight(player)) revokeOwnedFlight(player, player, "quit");
+        godMode.remove(player.getUniqueId());
+    }
+
+    private synchronized void refreshFlightReconciliation() {
+        stopFlightReconciliation();
+        if (plugin == null || scheduler == null || !flightFeatureEnabled()) return;
+        scheduleNextReconciliation();
+    }
+
+    private synchronized void scheduleNextReconciliation() {
+        if (plugin == null || scheduler == null || !plugin.isEnabled() || !flightFeatureEnabled()) return;
+        flightReconcileTask = scheduler.schedulePrimary(plugin, FLIGHT_RECONCILE_PERIOD, () -> {
+            synchronized (PlayerManagementService.this) {
+                flightReconcileTask = null;
+                reconcileOwnedFlight();
+                scheduleNextReconciliation();
+            }
+        });
+    }
+
+    private synchronized void stopFlightReconciliation() {
+        if (flightReconcileTask == null) return;
+        flightReconcileTask.cancel();
+        flightReconcileTask = null;
+    }
+
+    private void reconcileOwnedFlight() {
+        if (plugin == null || plugin.getServer() == null) return;
+        for (UUID id : Set.copyOf(managedFlight)) {
+            Player player = plugin.getServer().getPlayer(id);
+            if (player == null || !player.isOnline()) {
+                managedFlight.remove(id);
+                continue;
+            }
+            if (!canManageFlight(player)) {
+                releaseOwnership(player);
+                continue;
+            }
+            if (!flightAuthorized(player)) revokeOwnedFlight(player, player, "permission-or-feature-loss");
+        }
+    }
+
+    private boolean flightFeatureEnabled() {
+        UtilityConfig.AdminConfig admin = config.get().admin();
+        return admin.enabled() && admin.playerManagement().flyEnabled();
+    }
+
+    private boolean flightAuthorized(Player player) {
+        return flightFeatureEnabled() && player.hasPermission("plexonutility.fly");
+    }
+
+    private boolean ownsFlight(Player player) {
+        return managedFlight.contains(player.getUniqueId()) || hasOwnershipMarker(player);
+    }
+
+    private boolean hasOwnershipMarker(Player player) {
+        return flightOwnerKey != null
+                && player.getPersistentDataContainer().has(flightOwnerKey, PersistentDataType.BYTE);
+    }
+
+    private void markOwned(Player player) {
+        if (flightOwnerKey != null) {
+            player.getPersistentDataContainer().set(flightOwnerKey, PersistentDataType.BYTE, (byte) 1);
+        }
+    }
+
+    private void releaseOwnership(Player player) {
+        managedFlight.remove(player.getUniqueId());
+        if (flightOwnerKey != null) player.getPersistentDataContainer().remove(flightOwnerKey);
+    }
+
+    private void revokeOwnedFlight(Player target, CommandSender actor, String reason) {
+        if (!ownsFlight(target)) return;
+        releaseOwnership(target);
+        if (canManageFlight(target)) {
+            if (target.isFlying()) target.setFlying(false);
+            target.setAllowFlight(false);
+            target.setFallDistance(0.0F);
+        }
+        audit.log("FLY_OFF", actor, target, "state=false reason=" + reason);
     }
 
     private static void applySpeed(Player target, SpeedMode mode, float value) {
