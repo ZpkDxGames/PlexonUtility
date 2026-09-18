@@ -62,22 +62,27 @@ jobs:
           evidence="releases/${version}-runtime-smoke.txt"
           test -s "$evidence"
           grep -Fx 'result=PASS' "$evidence"
-          grep -Fx 'paper=26.2' "$evidence"
+          grep -Fx 'paper=26.2.build.121-stable' "$evidence"
           grep -Fx 'java=25' "$evidence"
+          grep -Fx 'plexoncore=2.1.0' "$evidence"
+          grep -Fx 'plexoncore_sha256=7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c' "$evidence"
+          candidate_hash="$(sed -n 's/^candidate_jar_sha256=//p' "$evidence")"
+          test -n "$candidate_hash"
+          echo "candidate_hash=$candidate_hash" >> "$GITHUB_ENV"
           test -z "$(git ls-remote --tags origin "refs/tags/v${version}" || true)"
 
-      - name: Provision immutable PlexonCore 2.0.5
+      - name: Provision immutable PlexonCore 2.1.0
         shell: bash
         run: |
           set -euo pipefail
-          core_jar="${RUNNER_TEMP}/PlexonCore-2.0.5.jar"
+          core_jar="${RUNNER_TEMP}/PlexonCore-2.1.0.jar"
           curl --fail --location --silent --show-error \
             --output "$core_jar" \
-            "https://github.com/ZpkDxGames/PlexonCore/releases/download/v2.0.5/PlexonCore-2.0.5.jar"
-          echo "bf4df796e83571e76c06b296c75c5e73ddc8053cb2c587d74c08cd3922e0b4d4  $core_jar" | sha256sum --check
+            "https://github.com/ZpkDxGames/PlexonCore/releases/download/v2.0.5/PlexonCore-2.1.0.jar"
+          echo "7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c  $core_jar" | sha256sum --check
           mvn -B -ntp org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
             -Dfile="$core_jar" -DgroupId=com.zpkdxgames -DartifactId=PlexonCore \
-            -Dversion=2.0.5 -Dpackaging=jar -DgeneratePom=true
+            -Dversion=2.1.0 -Dpackaging=jar -DgeneratePom=true
 
       - name: Verify release build
         run: mvn -B -ntp clean verify
@@ -122,6 +127,7 @@ jobs:
           for class in \
             'com/zpkdxgames/plexonutility/PlexonUtilityPlugin.class' \
             'com/zpkdxgames/plexonutility/api/PlexonUtilityAPI.class' \
+            'com/zpkdxgames/plexonutility/api/AfkState.class' \
             'com/zpkdxgames/plexonutility/api/event/AfkStateChangeEvent.class' \
             'com/zpkdxgames/plexonutility/api/event/VanishStateChangeEvent.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntitySelector.class' \
@@ -154,6 +160,8 @@ jobs:
             if grep -q "^${prefix}" target/jar-contents.txt; then echo "Provided runtime classes must not be bundled: ${prefix}" >&2; exit 1; fi
           done
           (cd target && sha256sum "PlexonUtility-${VERSION}.jar" > SHA256SUMS.txt && sha256sum --check SHA256SUMS.txt)
+          rebuilt_hash="$(sha256sum "$JAR" | awk '{print $1}')"
+          test "$rebuilt_hash" = "$candidate_hash"
           git diff --check
 
       - name: Generate provenance
@@ -170,7 +178,8 @@ jobs:
           java=25
           class_major=69
           paper_api=26.2.build.121-stable
-          plexoncore_compile_boundary=2.0.5
+          plexoncore_compile_boundary=2.1.0
+          plexoncore_sha256=7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c
           utility_capabilities=entity-management,entity-cleanup,entity-spawn,admin-center-3.5,player-admin,gamemode-control,flight-control,god-mode,speed-control,inventory-clear,synthetic-presence,vanish-event
           spawn_ownership=PlexonTravel
           entity_spawn_command=/spawnmob
