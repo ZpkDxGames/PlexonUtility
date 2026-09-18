@@ -192,8 +192,13 @@ public final class AdminActionCommand implements CommandExecutor {
             messages.send(sender, "players-only");
             return true;
         }
-        PrisonLocation location = prison.set(player);
-        messages.send(sender, "admin-prison-set", Map.of("world", location.world(), "coordinates", location.coordinates()));
+        prison.set(player).thenAccept(location ->
+                messages.send(sender, "admin-prison-set", Map.of(
+                        "world", location.world(), "coordinates", location.coordinates())))
+                .exceptionally(error -> {
+                    messages.send(sender, "admin-prison-persistence-failed", Map.of("reason", rootMessage(error)));
+                    return null;
+                });
         return true;
     }
 
@@ -204,7 +209,7 @@ public final class AdminActionCommand implements CommandExecutor {
             messages.send(sender, "players-only");
             return true;
         }
-        sendPrisonResult(sender, prison.gotoPrison(player), null);
+        prison.gotoPrison(player).thenAccept(result -> sendPrisonResult(sender, result, null));
         return true;
     }
 
@@ -216,15 +221,20 @@ public final class AdminActionCommand implements CommandExecutor {
             messages.send(sender, "admin-target-offline");
             return true;
         }
-        sendPrisonResult(sender, prison.send(sender, target), target.getName());
+        prison.send(sender, target).thenAccept(result -> sendPrisonResult(sender, result, target.getName()));
         return true;
     }
 
     private boolean prisonClear(CommandSender sender, String[] args) {
         if (args.length != 1) return false;
         if (!permission(sender, "plexonutility.admin.prison.clear")) return true;
-        if (prison.clear(sender)) messages.send(sender, "admin-prison-cleared");
-        else messages.send(sender, "admin-prison-not-configured");
+        prison.clear(sender).thenAccept(cleared -> {
+            if (cleared) messages.send(sender, "admin-prison-cleared");
+            else messages.send(sender, "admin-prison-not-configured");
+        }).exceptionally(error -> {
+            messages.send(sender, "admin-prison-persistence-failed", Map.of("reason", rootMessage(error)));
+            return null;
+        });
         return true;
     }
 
@@ -237,6 +247,7 @@ public final class AdminActionCommand implements CommandExecutor {
             case NOT_CONFIGURED -> messages.send(sender, "admin-prison-not-configured");
             case WORLD_MISSING -> messages.send(sender, "admin-prison-world-missing");
             case TARGET_OFFLINE -> messages.send(sender, "admin-target-offline");
+            case ACTOR_OFFLINE -> { }
             case TELEPORT_FAILED -> messages.send(sender, "admin-prison-teleport-failed");
         }
     }
@@ -253,6 +264,13 @@ public final class AdminActionCommand implements CommandExecutor {
         if (sender.hasPermission(node)) return true;
         messages.send(sender, "no-permission");
         return false;
+    }
+
+    private static String rootMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) current = current.getCause();
+        String message = current.getMessage();
+        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
     }
 
     private static String display(OfflinePlayer player) {
