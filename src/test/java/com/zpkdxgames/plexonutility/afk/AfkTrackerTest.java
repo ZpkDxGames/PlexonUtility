@@ -1,5 +1,6 @@
 package com.zpkdxgames.plexonutility.afk;
 
+import com.zpkdxgames.plexonutility.api.AfkState;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
@@ -87,6 +88,36 @@ class AfkTrackerTest {
         tracker.quit(player);
         assertFalse(tracker.isTracked(player));
         assertEquals(0, tracker.trackedPlayers());
+    }
+
+
+    @Test
+    void snapshotReportsManualAndTimeoutReasonsWithoutClockLeakage() {
+        AtomicLong clock = new AtomicLong(100L);
+        AfkTracker tracker = new AfkTracker(clock::get);
+        UUID manual = UUID.randomUUID();
+        UUID timeout = UUID.randomUUID();
+
+        tracker.join(manual);
+        tracker.toggle(manual);
+        AfkState manualState = tracker.snapshot(manual);
+        assertTrue(manualState.tracked());
+        assertTrue(manualState.afk());
+        assertEquals(AfkState.Reason.MANUAL, manualState.reason());
+
+        tracker.join(timeout);
+        clock.set(1_100L);
+        tracker.evaluateTimeout(timeout, 500L, false);
+        AfkState timeoutState = tracker.snapshot(timeout);
+        assertTrue(timeoutState.afk());
+        assertEquals(AfkState.Reason.TIMEOUT, timeoutState.reason());
+        assertEquals(1_000L, timeoutState.idleDuration().toNanos());
+
+        AfkState missing = tracker.snapshot(UUID.randomUUID());
+        assertFalse(missing.tracked());
+        assertFalse(missing.afk());
+        assertEquals(AfkState.Reason.NONE, missing.reason());
+        assertTrue(missing.idleDuration().isZero());
     }
 
     @Test
