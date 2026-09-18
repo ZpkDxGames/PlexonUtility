@@ -92,7 +92,6 @@ commands:
   fly:
     description: Toggle controlled survival/adventure flight.
     usage: /fly [on|off] [player]
-    permission: plexonutility.fly
   god:
     description: Toggle event-driven god mode.
     usage: /god [on|off] [player]
