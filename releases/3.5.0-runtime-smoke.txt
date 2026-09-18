@@ -3,9 +3,13 @@ paper=26.2.build.121-stable
 java=25
 plexoncore=2.1.0
 plexoncore_sha256=7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c
-candidate_jar_sha256=PENDING
-implementation_commit=PENDING
+candidate_jar_sha256=00ebac64d07024b4ffa99113ac3e4ba0edf05383fdfd7dd3f95b321d4346585c
+implementation_commit=8eaa31cdb8c8121dc68d36f67f4412dd55741a9b
 certified_at=PENDING
+ci_workflow_run=35391338528
+ci_artifact_id=10565803173
+ci_artifact_zip_sha256=114903eac1cf755517b52a401dd47894b66efbe7a47d76b87e64eb57bd7792b5
+candidate_jar_size=320124
 environment=PENDING
 
 startup_and_plugin_list=PENDING
