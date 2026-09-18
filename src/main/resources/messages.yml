@@ -71,3 +71,6 @@ admin-speed-success: '<green>Set <white><player></white>''s <mode> speed to <whi
 admin-speed-reset: '<green>Reset <white><player></white>''s <mode> speed.</green>'
 admin-speed-invalid: '<red>Speed must be 1-10 or reset:</red> <white><speed></white>'
 admin-clearinventory-success: '<green>Cleared <white><count></white> occupied inventory stacks from <white><player></white>.</green>'
+admin-clearinventory-confirm: '<yellow>About to clear <white><count></white> occupied stacks from <white><player></white>. Run <white>/clearinventory confirm</white> within <seconds>s to continue.</yellow>'
+admin-clearinventory-confirm-expired: '<red>No pending clear-inventory confirmation exists, or it expired.</red>'
+admin-clearinventory-changed: '<yellow><player>''s inventory changed after preview. New occupied-stack count: <white><count></white>. Run <white>/clearinventory confirm</white> again within <seconds>s.</yellow>'
