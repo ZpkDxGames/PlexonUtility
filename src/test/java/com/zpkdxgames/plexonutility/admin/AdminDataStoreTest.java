@@ -87,6 +87,7 @@ class AdminDataStoreTest {
         Server server = mock(Server.class);
         when(plugin.getDataFolder()).thenReturn(tempDir.toFile());
         when(plugin.getServer()).thenReturn(server);
+        when(plugin.getLogger()).thenReturn(java.util.logging.Logger.getLogger("AdminDataStoreTest"));
         when(scheduler.runIo(eq(plugin), any(Runnable.class))).thenAnswer(invocation -> {
             ((Runnable) invocation.getArgument(1)).run();
             return CompletableFuture.completedFuture(null);
