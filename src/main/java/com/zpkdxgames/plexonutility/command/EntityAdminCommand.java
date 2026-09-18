@@ -197,7 +197,20 @@ public final class EntityAdminCommand implements TabExecutor {
             return true;
         }
 
-        EntitySpawnService.SpawnResult result = spawning.spawn(sender, player, type, amount);
+        spawning.spawnBatched(sender, player, type, amount).whenComplete((result, error) -> {
+            if (error != null) {
+                messages.send(sender, "admin-spawnmob-partial", Map.of(
+                        "spawned", "0", "requested", Integer.toString(amount),
+                        "failed", Integer.toString(amount),
+                        "type", type.name().toLowerCase(Locale.ROOT)));
+                return;
+            }
+            sendSpawnResult(sender, type, result);
+        });
+        return true;
+    }
+
+    private void sendSpawnResult(CommandSender sender, EntityType type, EntitySpawnService.SpawnResult result) {
         if (result.location() == null) {
             messages.send(sender, "admin-spawnmob-no-safe-location");
         } else if (result.failed() > 0) {
@@ -211,7 +224,6 @@ public final class EntityAdminCommand implements TabExecutor {
                     "count", Integer.toString(result.spawned()),
                     "type", type.name().toLowerCase(Locale.ROOT)));
         }
-        return true;
     }
 
     @Override
