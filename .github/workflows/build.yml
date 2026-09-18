@@ -80,6 +80,7 @@ jobs:
             'com/zpkdxgames/plexonutility/api/AfkState.class' \
             'com/zpkdxgames/plexonutility/api/event/AfkStateChangeEvent.class' \
             'com/zpkdxgames/plexonutility/api/event/VanishStateChangeEvent.class' \
+            'com/zpkdxgames/plexonutility/api/event/SyntheticPresencePresentationEvent.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntitySelector.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntityCleanupService.class' \
             'com/zpkdxgames/plexonutility/admin/entity/EntitySpawnService.class' \
