@@ -92,7 +92,7 @@ commands:
   fly:
     description: Toggle controlled survival/adventure flight.
     usage: /fly [on|off] [player]
-    permission: plexonutility.admin.fly
+    permission: plexonutility.fly
   god:
     description: Toggle event-driven god mode.
     usage: /god [on|off] [player]
@@ -114,19 +114,19 @@ permissions:
   plexonutility.menu:
     default: true
   plexonutility.feed:
-    default: true
+    default: false
   plexonutility.feed.others:
     default: op
   plexonutility.feed.cooldown.bypass:
     default: op
   plexonutility.heal:
-    default: true
+    default: false
   plexonutility.heal.others:
     default: op
   plexonutility.heal.cooldown.bypass:
     default: op
   plexonutility.enderchest:
-    default: true
+    default: false
   plexonutility.enderchest.others:
     default: op
   plexonutility.workbench:
@@ -136,8 +136,10 @@ permissions:
   plexonutility.afk:
     default: true
   plexonutility.afk.auto.bypass:
-    default: op
+    default: false
   plexonutility.anvil:
+    default: false
+  plexonutility.fly:
     default: false
 
   plexonutility.admin:
@@ -161,10 +163,10 @@ permissions:
       plexonutility.admin.clearinventory.others: true
       plexonutility.admin.killall: true
       plexonutility.admin.killall.world: true
-      plexonutility.admin.killall.bypass-confirm: true
       plexonutility.admin.spawnmob: true
       plexonutility.admin.gamemode: true
       plexonutility.admin.gamemode.others: true
+      plexonutility.fly: true
       plexonutility.admin.fly: true
       plexonutility.admin.fly.others: true
       plexonutility.admin.god: true
