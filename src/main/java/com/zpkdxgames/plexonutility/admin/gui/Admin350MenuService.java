@@ -299,7 +299,8 @@ public final class Admin350MenuService {
             }
             query = new EntityCleanupService.Query(selection, actor.getWorld(), actor.getLocation(), (double) radius);
         }
-        EntityCleanupService.Preview preview = cleanup.preview(query);
+        EntityCleanupService.Plan plan = cleanup.plan(query);
+        EntityCleanupService.Preview preview = plan.preview();
         if (preview.removable() == 0) {
             messages.send(actor, "admin-killall-none", Map.of(
                     "matched", Integer.toString(preview.matched()),
@@ -314,13 +315,14 @@ public final class Admin350MenuService {
                 "",
                 "<red>This action is destructive.</red>"));
         gui.confirmation(actor, "utility", "killall-confirm-3.5", items.render("<red><bold>Confirm Cleanup</bold></red>"), subject,
-                confirmed -> executeCleanup(confirmed, query), this::openEntityManagement);
+                confirmed -> executeCleanup(confirmed, plan), this::openEntityManagement);
     }
 
-    private void executeCleanup(Player actor, EntityCleanupService.Query query) {
+    private void executeCleanup(Player actor, EntityCleanupService.Plan plan) {
         if (!requireFeature(actor, config.get().admin().entityManagement().enabled()
                 && config.get().admin().entityManagement().killall().enabled(), "plexonutility.admin.killall")) return;
-        EntityCleanupService.Result result = cleanup.execute(actor, query);
+        EntityCleanupService.Query query = plan.query();
+        EntityCleanupService.Result result = cleanup.execute(actor, plan);
         messages.send(actor, "admin-killall-success", Map.of(
                 "count", Integer.toString(result.removed()),
                 "protected", Integer.toString(result.protectedCount()),
