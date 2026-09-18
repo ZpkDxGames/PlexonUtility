@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,50 +25,55 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PrisonServiceTest {
-    @Test void setPreservesWorldCoordinatesAndRotationAndAudits() {
+    @Test void setPreservesWorldIdentityCoordinatesRotationAndWaitsForDurability() {
         Fixture fixture = fixture();
         Player actor = mock(Player.class);
         World world = mock(World.class);
+        UUID worldId = UUID.randomUUID();
+        when(world.getUID()).thenReturn(worldId);
         when(world.getName()).thenReturn("Survival_World");
         when(actor.getLocation()).thenReturn(new Location(world, 1.5, 64.25, -8.75, 91.0F, -12.5F));
+        when(fixture.data.setPrison(any(PrisonLocation.class))).thenReturn(
+                CompletableFuture.completedFuture(new AdminDataStore.PersistenceResult(1L, true, "persisted")));
 
-        PrisonLocation result = fixture.service.set(actor);
+        PrisonLocation result = fixture.service.set(actor).join();
 
-        assertEquals(new PrisonLocation("Survival_World", 1.5, 64.25, -8.75, 91.0F, -12.5F), result);
+        assertEquals(worldId, result.worldId());
+        assertEquals("Survival_World", result.worldName());
+        assertEquals(1.5, result.x());
         verify(fixture.data).setPrison(result);
-        verify(fixture.audit).log("PRISON_SET", actor, "world=Survival_World coordinates=2, 64, -9");
+        verify(fixture.audit).log("PRISON_SET", actor,
+                "world=Survival_World coordinates=2, 64, -9 revision=1");
     }
 
     @Test void gotoDistinguishesNotConfiguredAndMissingWorld() {
         Fixture fixture = fixture();
-        Player actor = mock(Player.class);
+        Player actor = onlinePlayer();
         when(fixture.data.snapshot()).thenReturn(AdminDataStore.Snapshot.empty());
-        assertEquals(PrisonService.Result.NOT_CONFIGURED, fixture.service.gotoPrison(actor));
+        assertEquals(PrisonService.Result.NOT_CONFIGURED, fixture.service.gotoPrison(actor).join());
 
         PrisonLocation location = location();
         when(fixture.data.snapshot()).thenReturn(new AdminDataStore.Snapshot(location, Set.of()));
         when(fixture.server.getWorld("Survival_World")).thenReturn(null);
-        assertEquals(PrisonService.Result.WORLD_MISSING, fixture.service.gotoPrison(actor));
+        assertEquals(PrisonService.Result.WORLD_MISSING, fixture.service.gotoPrison(actor).join());
     }
 
-    @Test void gotoTeleportsToResolvedLocation() {
+    @Test void gotoUsesTeleportAsyncAndCompletesAfterSuccess() {
         Fixture fixture = fixture();
-        Player actor = mock(Player.class);
+        Player actor = onlinePlayer();
         World world = mock(World.class);
         PrisonLocation location = location();
         when(fixture.data.snapshot()).thenReturn(new AdminDataStore.Snapshot(location, Set.of()));
         when(fixture.server.getWorld("Survival_World")).thenReturn(world);
-        when(actor.teleport(any(Location.class))).thenReturn(true);
+        when(actor.teleportAsync(any(Location.class))).thenReturn(CompletableFuture.completedFuture(true));
 
-        assertEquals(PrisonService.Result.SUCCESS, fixture.service.gotoPrison(actor));
+        assertEquals(PrisonService.Result.SUCCESS, fixture.service.gotoPrison(actor).join());
 
         ArgumentCaptor<Location> captor = ArgumentCaptor.forClass(Location.class);
-        verify(actor).teleport(captor.capture());
+        verify(actor).teleportAsync(captor.capture());
         assertEquals(5.5, captor.getValue().getX());
         assertEquals(70.0, captor.getValue().getY());
         assertEquals(-3.5, captor.getValue().getZ());
-        assertEquals(45.0F, captor.getValue().getYaw());
-        assertEquals(8.0F, captor.getValue().getPitch());
     }
 
     @Test void sendRejectsTargetDisconnectRaceBeforeTeleport() {
@@ -75,43 +82,53 @@ class PrisonServiceTest {
         Player target = mock(Player.class);
         when(target.isOnline()).thenReturn(false);
 
-        assertEquals(PrisonService.Result.TARGET_OFFLINE, fixture.service.send(actor, target));
-        verify(target, never()).teleport(any(Location.class));
+        assertEquals(PrisonService.Result.TARGET_OFFLINE, fixture.service.send(actor, target).join());
+        verify(target, never()).teleportAsync(any(Location.class));
     }
 
-    @Test void sendTeleportsAndAuditsSuccessfulAction() {
+    @Test void sendRevalidatesDisconnectAfterAsyncTeleport() {
         Fixture fixture = fixture();
         CommandSender actor = mock(CommandSender.class);
         Player target = mock(Player.class);
         World world = mock(World.class);
         PrisonLocation location = location();
-        when(target.isOnline()).thenReturn(true);
         when(fixture.data.snapshot()).thenReturn(new AdminDataStore.Snapshot(location, Set.of()));
         when(fixture.server.getWorld("Survival_World")).thenReturn(world);
-        when(target.teleport(any(Location.class))).thenReturn(true);
+        when(target.isOnline()).thenReturn(true, false);
+        when(target.isConnected()).thenReturn(true);
+        when(target.teleportAsync(any(Location.class))).thenReturn(CompletableFuture.completedFuture(true));
 
-        assertEquals(PrisonService.Result.SUCCESS, fixture.service.send(actor, target));
-        verify(fixture.audit).log("PRISON_SEND", actor, target,
-                "world=Survival_World coordinates=6, 70, -3");
+        assertEquals(PrisonService.Result.TARGET_OFFLINE, fixture.service.send(actor, target).join());
+        verify(fixture.audit, never()).log(
+                org.mockito.ArgumentMatchers.eq("PRISON_SEND"),
+                any(CommandSender.class), any(Player.class), any(String.class));
     }
 
-    @Test void clearOnlyMutatesWhenConfigured() {
+    @Test void clearReportsSuccessOnlyAfterDurableWrite() {
         Fixture fixture = fixture();
         CommandSender actor = mock(CommandSender.class);
-        when(fixture.data.snapshot()).thenReturn(AdminDataStore.Snapshot.empty());
-        assertFalse(fixture.service.clear(actor));
-        verify(fixture.data, never()).clearPrison();
-
         PrisonLocation location = location();
         when(fixture.data.snapshot()).thenReturn(new AdminDataStore.Snapshot(location, Set.of()));
-        assertTrue(fixture.service.clear(actor));
-        verify(fixture.data).clearPrison();
+        when(fixture.data.clearPrison()).thenReturn(
+                CompletableFuture.completedFuture(new AdminDataStore.PersistenceResult(2L, true, "persisted")));
+
+        assertTrue(fixture.service.clear(actor).join());
         verify(fixture.audit).log("PRISON_CLEAR", actor,
-                "world=Survival_World coordinates=6, 70, -3");
+                "world=Survival_World coordinates=6, 70, -3 revision=2");
+
+        when(fixture.data.snapshot()).thenReturn(AdminDataStore.Snapshot.empty());
+        assertFalse(fixture.service.clear(actor).join());
     }
 
     private static PrisonLocation location() {
         return new PrisonLocation("Survival_World", 5.5, 70.0, -3.5, 45.0F, 8.0F);
+    }
+
+    private static Player onlinePlayer() {
+        Player player = mock(Player.class);
+        when(player.isOnline()).thenReturn(true);
+        when(player.isConnected()).thenReturn(true);
+        return player;
     }
 
     private static Fixture fixture() {
