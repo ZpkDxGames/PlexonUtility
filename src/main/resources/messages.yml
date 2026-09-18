@@ -43,6 +43,7 @@ admin-prison-sent: '<green>Sent <white><player></white> to the prison holding lo
 admin-prison-cleared: '<green>Prison holding location cleared.</green>'
 admin-prison-world-missing: '<red>The configured prison world is unavailable.</red>'
 admin-prison-teleport-failed: '<red>The prison teleport could not be completed.</red>'
+admin-prison-persistence-failed: '<red>The prison location change could not be saved:</red> <gray><reason></gray>'
 
 admin-killall-usage: '<yellow>Usage:</yellow> <white>/killall <category|entity> [radius|world [world]]</white>'
 admin-killall-confirm: '<yellow><count> entities are eligible for removal.</yellow> <gray>Run <white>/killall confirm</white> within <seconds>s.</gray>'
