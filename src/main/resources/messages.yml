@@ -50,6 +50,7 @@ admin-killall-confirm: '<yellow><count> entities are eligible for removal.</yell
 admin-killall-confirm-expired: '<yellow>No active entity-cleanup confirmation exists, or it expired.</yellow>'
 admin-killall-success: '<green>Removed <white><count></white> <selector> entities in <white><world></white>.</green> <gray>Protected: <protected>.</gray>'
 admin-killall-none: '<yellow>No removable entities matched.</yellow> <gray>Matched: <matched> • protected: <protected>.</gray>'
+admin-killall-too-large: '<red>Cleanup preview exceeded the safe plan ceiling.</red> <gray>Limit: <white><limit></white>. Narrow the selector or scope.</gray>'
 admin-killall-invalid-selector: '<red>Unknown entity category/type:</red> <white><selector></white>'
 admin-killall-invalid-radius: '<red>Invalid cleanup radius:</red> <white><radius></white>'
 admin-killall-console-world-required: '<yellow>Console must use:</yellow> <white>/killall <selector> world <world></white>'
