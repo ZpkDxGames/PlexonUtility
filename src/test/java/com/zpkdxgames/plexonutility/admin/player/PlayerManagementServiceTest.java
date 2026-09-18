@@ -74,6 +74,44 @@ class PlayerManagementServiceTest {
         verify(player, never()).setFlying(false);
     }
 
+    @Test void permissionLossRevokesOnlyUtilityOwnedFlight() {
+        Player player = player(GameMode.SURVIVAL);
+        when(player.hasPermission("plexonutility.fly")).thenReturn(true, false);
+        PlayerManagementService service = service();
+
+        service.setFlight(player, player, true);
+        assertTrue(service.isFlightManaged(player.getUniqueId()));
+
+        service.reconcileFlight(player);
+
+        assertFalse(service.isFlightManaged(player.getUniqueId()));
+        verify(player).setAllowFlight(false);
+    }
+
+    @Test void quitRevokesUtilityOwnedFlight() {
+        Player player = player(GameMode.SURVIVAL);
+        PlayerManagementService service = service();
+        service.setFlight(player, player, true);
+
+        org.bukkit.event.player.PlayerQuitEvent event = mock(org.bukkit.event.player.PlayerQuitEvent.class);
+        when(event.getPlayer()).thenReturn(player);
+        service.onQuit(event);
+
+        assertFalse(service.isFlightManaged(player.getUniqueId()));
+        verify(player).setAllowFlight(false);
+    }
+
+    @Test void externallyOwnedFlightIsNeverRevokedOrClaimed() {
+        Player player = player(GameMode.SURVIVAL);
+        when(player.getAllowFlight()).thenReturn(true);
+        PlayerManagementService service = service();
+
+        assertTrue(service.setFlight(player, player, false));
+
+        assertFalse(service.isFlightManaged(player.getUniqueId()));
+        verify(player, never()).setAllowFlight(false);
+    }
+
     @Test void speedMappingAlwaysStaysInsideBukkitRange() {
         Player player = player(GameMode.SURVIVAL);
         PlayerManagementService service = service();
