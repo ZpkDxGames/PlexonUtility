@@ -13,6 +13,7 @@ candidate_jar_size=320124
 environment=PENDING
 
 startup_and_plugin_list=PENDING
+migration_matrix=PENDING
 duplicate_command_warnings=PENDING
 afk_matrix=PENDING
 rank_permission_matrix=PENDING
