@@ -37,7 +37,7 @@ public final class EntityAdminCommand implements TabExecutor {
     private final MessageService messages;
     private final EntityCleanupService cleanup;
     private final EntitySpawnService spawning;
-    private final TimedConfirmationStore<EntityCleanupService.Query> pending =
+    private final TimedConfirmationStore<EntityCleanupService.Plan> pending =
             new TimedConfirmationStore<>(CONFIRM_TTL_NANOS, System::nanoTime);
 
     public EntityAdminCommand(Supplier<UtilityConfig> config, MessageService messages,
@@ -78,7 +78,8 @@ public final class EntityAdminCommand implements TabExecutor {
 
         EntityCleanupService.Query query = query(sender, selection, args);
         if (query == null) return true;
-        EntityCleanupService.Preview preview = cleanup.preview(query);
+        EntityCleanupService.Plan plan = cleanup.plan(query);
+        EntityCleanupService.Preview preview = plan.preview();
         if (preview.removable() == 0) {
             messages.send(sender, "admin-killall-none", Map.of(
                     "matched", Integer.toString(preview.matched()),
@@ -88,7 +89,7 @@ public final class EntityAdminCommand implements TabExecutor {
 
         int threshold = entity.killall().confirmationThreshold();
         if (preview.removable() >= threshold && !sender.hasPermission("plexonutility.admin.killall.bypass-confirm")) {
-            pending.put(actorKey(sender), query);
+            pending.put(actorKey(sender), plan);
             messages.send(sender, "admin-killall-confirm", Map.of(
                     "count", Integer.toString(preview.removable()), "seconds", "15"));
             return true;
@@ -98,12 +99,12 @@ public final class EntityAdminCommand implements TabExecutor {
     }
 
     private boolean confirm(CommandSender sender) {
-        EntityCleanupService.Query query = pending.consume(actorKey(sender)).orElse(null);
-        if (query == null) {
+        EntityCleanupService.Plan plan = pending.consume(actorKey(sender)).orElse(null);
+        if (plan == null) {
             messages.send(sender, "admin-killall-confirm-expired");
             return true;
         }
-        sendCleanupResult(sender, query, cleanup.execute(sender, query));
+        sendCleanupResult(sender, plan.query(), cleanup.execute(sender, plan));
         return true;
     }
 
