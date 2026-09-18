@@ -139,8 +139,22 @@ jobs:
           from pathlib import Path
           import re
 
-          source = Path(".github/workflows/release.yml").read_text(encoding="utf-8").splitlines()
-          marker = "      - name: Verify stable release and runtime boundaries"
+          source_text = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
+          source = source_text.splitlines()
+          required_once = [
+              "      - name: Verify stable release and runtime boundaries",
+              "      - name: Provision immutable PlexonCore 2.1.0",
+              "      - name: Verify release build",
+              "      - name: Generate test summary",
+              "      - name: Verify 3.5 distribution and generate checksum",
+              "      - name: Generate provenance",
+              "      - name: Publish GitHub stable release",
+          ]
+          for marker_name in required_once:
+              count = source_text.count(marker_name)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one {marker_name!r}, found {count}")
+          marker = required_once[0]
           start = source.index(marker)
           run_line = next(i for i in range(start, len(source)) if source[i] == "        run: |")
           body = []
