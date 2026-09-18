@@ -25,8 +25,10 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -47,9 +49,10 @@ public final class AfkManager implements Listener, AutoCloseable {
         this.config = config;
         this.tracker = tracker;
         this.notifier = new AfkNotifier(config, feedback);
-        this.coreScheduler = coreScheduler;
+        this.coreScheduler = Objects.requireNonNull(coreScheduler, "coreScheduler");
         this.scheduler = new SharedScheduler((periodTicks, task) -> {
-            var handle = plugin.getServer().getScheduler().runTaskTimer(plugin, task, periodTicks, periodTicks);
+            Duration delay = Duration.ofMillis(Math.multiplyExact(periodTicks, 50L));
+            var handle = this.coreScheduler.schedulePrimary(plugin, delay, task);
             return handle::cancel;
         });
     }
