@@ -10,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -79,6 +80,67 @@ class AdminDataStoreTest {
         assertEquals(AdminDataStore.SCHEMA_VERSION,
                 org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file.toFile()).getInt("schema-version"));
         assertFalse(fixture.store().status().dirty());
+    }
+
+    @Test void failedWriteRetriesBecomesDegradedAndLaterFullSnapshotRecovers() throws Exception {
+        Path blocked = tempDir.resolve("blocked-data-folder");
+        Files.writeString(blocked, "not-a-directory");
+
+        JavaPlugin plugin = mock(JavaPlugin.class);
+        CoreScheduler scheduler = mock(CoreScheduler.class);
+        Server server = mock(Server.class);
+        when(plugin.getDataFolder()).thenReturn(blocked.toFile());
+        when(plugin.getServer()).thenReturn(server);
+        when(plugin.getLogger()).thenReturn(java.util.logging.Logger.getLogger("AdminDataStoreFailureTest"));
+        when(scheduler.runIo(eq(plugin), any(Runnable.class))).thenAnswer(invocation -> {
+            try {
+                ((Runnable) invocation.getArgument(1)).run();
+                return CompletableFuture.completedFuture(null);
+            } catch (Throwable failure) {
+                return CompletableFuture.failedFuture(failure);
+            }
+        });
+
+        AdminDataStore store = new AdminDataStore(plugin, scheduler);
+        PrisonLocation prison = new PrisonLocation("Survival_World", 1, 64, 1, 0, 0);
+
+        AdminDataStore.PersistenceResult failed = store.setPrison(prison).join();
+
+        assertFalse(failed.durable());
+        assertEquals(AdminDataStore.HealthState.DEGRADED, store.status().health());
+        assertTrue(store.status().dirty());
+        assertEquals(2, store.status().retryCount());
+        assertTrue(store.status().lastFailure() != null && !store.status().lastFailure().isBlank());
+
+        Files.delete(blocked);
+        Files.createDirectories(blocked);
+        AdminDataStore.PersistenceResult recovered = store.setVanished(UUID.randomUUID(), true).join();
+
+        assertTrue(recovered.durable());
+        assertEquals(AdminDataStore.HealthState.READY, store.status().health());
+        assertFalse(store.status().dirty());
+        assertEquals(store.status().currentRevision(), store.status().persistedRevision());
+    }
+
+    @Test void boundedCloseReturnsWithDirtyStateWhenIoNeverCompletes() {
+        JavaPlugin plugin = mock(JavaPlugin.class);
+        CoreScheduler scheduler = mock(CoreScheduler.class);
+        when(plugin.getDataFolder()).thenReturn(tempDir.toFile());
+        when(plugin.getLogger()).thenReturn(java.util.logging.Logger.getLogger("AdminDataStoreCloseTest"));
+
+        CompletableFuture<Void> stalled = new CompletableFuture<>();
+        when(scheduler.runIo(eq(plugin), any(Runnable.class))).thenReturn(stalled);
+        AdminDataStore store = new AdminDataStore(plugin, scheduler);
+        store.setPrison(new PrisonLocation("Survival_World", 1, 64, 1, 0, 0));
+
+        long started = System.nanoTime();
+        store.close(Duration.ofMillis(20));
+        long elapsedMillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+
+        assertTrue(elapsedMillis < 1_000L);
+        assertTrue(store.status().dirty());
+        assertEquals(AdminDataStore.HealthState.CLOSED, store.status().health());
+        assertEquals(1, store.status().pendingWrites());
     }
 
     private Fixture fixture() {
