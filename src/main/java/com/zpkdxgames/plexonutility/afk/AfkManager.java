@@ -1,6 +1,7 @@
 package com.zpkdxgames.plexonutility.afk;
 
 import com.zpkdxgames.plexoncore.scheduler.CoreScheduler;
+import com.zpkdxgames.plexonutility.api.AfkState;
 import com.zpkdxgames.plexonutility.api.event.AfkStateChangeEvent;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import com.zpkdxgames.plexonutility.feature.Feature;
@@ -87,6 +88,10 @@ public final class AfkManager implements Listener, AutoCloseable {
 
     public boolean isAfk(UUID playerId) {
         return tracker.isAfk(playerId);
+    }
+
+    public AfkState afkState(UUID playerId) {
+        return tracker.snapshot(playerId);
     }
 
     public int trackedPlayers() {
