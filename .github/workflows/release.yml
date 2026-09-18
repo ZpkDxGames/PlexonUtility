@@ -68,6 +68,7 @@ jobs:
           grep -Fx 'plexoncore_sha256=7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c' "$evidence"
           for gate in \
             startup_and_plugin_list \
+            migration_matrix \
             duplicate_command_warnings \
             afk_matrix \
             rank_permission_matrix \
