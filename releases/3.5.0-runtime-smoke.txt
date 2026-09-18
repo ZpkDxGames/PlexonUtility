@@ -4,11 +4,11 @@ java=25
 plexoncore=2.1.0
 plexoncore_sha256=7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c
 candidate_jar_sha256=00ebac64d07024b4ffa99113ac3e4ba0edf05383fdfd7dd3f95b321d4346585c
-implementation_commit=8eaa31cdb8c8121dc68d36f67f4412dd55741a9b
+implementation_commit=0d73a9232db4bc3c1f989245cc7f889e02f3f74a
 certified_at=PENDING
-ci_workflow_run=35391338528
-ci_artifact_id=10565803173
-ci_artifact_zip_sha256=114903eac1cf755517b52a401dd47894b66efbe7a47d76b87e64eb57bd7792b5
+ci_workflow_run=PENDING
+ci_artifact_id=PENDING
+ci_artifact_zip_sha256=PENDING
 candidate_jar_size=320124
 environment=PENDING
 
@@ -31,4 +31,4 @@ spark_result=PENDING
 spark_evidence=PENDING
 essentials_decommission=PENDING
 
-notes=Runtime certification has not yet been executed against the exact final PlexonUtility 3.5.0 candidate. Stable publication must remain blocked until every required matrix line is real evidence and this file is replaced with PASS results bound to the candidate JAR SHA-256.
+notes=Source implementation is frozen at main commit 0d73a9232db4bc3c1f989245cc7f889e02f3f74a. Runtime certification is still PENDING. Only this evidence file may change before stable publication.
