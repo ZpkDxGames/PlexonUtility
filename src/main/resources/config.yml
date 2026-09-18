@@ -76,6 +76,8 @@ admin:
       enabled: true
       max-radius: 512
       confirmation-threshold: 250
+      # Fail closed if a selector/scope matches more entities than one confirmation plan may hold.
+      max-candidates: 10000
       protect:
         named: true
         tamed: true
