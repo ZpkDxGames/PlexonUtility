@@ -61,7 +61,6 @@ public final class PlayerAdminCommand implements TabExecutor {
     }
 
     private boolean fly(CommandSender sender, String[] args) {
-        if (!feature(sender, config.get().admin().playerManagement().flyEnabled(), "plexonutility.admin.fly")) return true;
         if (args.length > 2) return false;
         Boolean requested = null;
         String targetName = null;
@@ -73,6 +72,8 @@ public final class PlayerAdminCommand implements TabExecutor {
             if (requested == null) return false;
             targetName = args[1];
         }
+        String permission = targetName == null ? "plexonutility.fly" : "plexonutility.admin.fly.others";
+        if (!feature(sender, config.get().admin().playerManagement().flyEnabled(), permission)) return true;
         Player target = target(sender, targetName, "plexonutility.admin.fly.others");
         if (target == null) return true;
         if (!players.canManageFlight(target)) {
