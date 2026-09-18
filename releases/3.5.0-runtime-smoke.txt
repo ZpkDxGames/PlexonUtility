@@ -1,0 +1,11 @@
+result=PENDING
+paper=26.2.build.121-stable
+java=25
+plexoncore=2.1.0
+plexoncore_sha256=7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c
+candidate_jar_sha256=PENDING
+implementation_commit=PENDING
+certified_at=PENDING
+environment=PENDING
+spark_evidence=PENDING
+notes=Runtime certification has not yet been executed against the exact final PlexonUtility 3.5.0 candidate. Stable publication must remain blocked until this file is replaced with real PASS evidence bound to the candidate JAR SHA-256.
