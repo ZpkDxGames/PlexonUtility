@@ -331,7 +331,7 @@ public final class Admin350MenuService {
                         return;
                     }
                     messages.send(actor, "admin-killall-success", Map.of(
-                            "count", Integer.toString(result.removed()),
+                            "count", Integer.toString(result.logicalRemoved()),
                             "protected", Integer.toString(result.protectedCount()),
                             "selector", query.selection().canonical(),
                             "world", query.world().getName()));
