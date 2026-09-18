@@ -69,6 +69,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
     private UtilityPlaceholderExpansion placeholderExpansion;
     private PlexonUtilityAPI api;
     private volatile long runtimeGeneration;
+    private volatile String runtimeFailure;
 
     @Override
     public void onEnable() {
@@ -105,7 +106,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             command("utility").setExecutor(utilityMenu);
             command("trash").setExecutor(new TrashService(this::utilityConfig, messages, core.text(), feedback));
 
-            adminData = new AdminDataStore(this, core.scheduler());
+            adminData = new AdminDataStore(this, core.scheduler(), this::onAdminDataHealthChanged);
             adminData.load();
             AdminAuditService audit = new AdminAuditService(getLogger());
             SyntheticPresenceBridge syntheticPresence = new SyntheticPresenceBridge(this, this::utilityConfig, core.text());
@@ -163,11 +164,8 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
 
             persistCommittedMigrations(configCandidate, messageCandidate);
             runtimeGeneration = 1L;
-            coreBridge.ready("generation=" + runtimeGeneration
-                    + "; Core text/gui/scheduler/integrations shared; admin-toolkit=" + utilityConfig.admin().enabled()
-                    + "; synthetic-presence=" + vanishService.syntheticPresenceMode()
-                    + "; family-ready=" + family.readyCount() + "/" + family.totalCount()
-                    + "; enabled features: " + utilityConfig.enabledFeatures());
+            runtimeFailure = null;
+            publishRuntimeHealth("startup committed");
             getLogger().info("PlexonUtility " + getPluginMeta().getVersion() + " enabled with " + utilityConfig.enabledFeatures()
                     + "; Core-native text/gui/scheduler/integrations; admin-toolkit=" + utilityConfig.admin().enabled()
                     + "; synthetic-presence=" + vanishService.syntheticPresenceMode()
@@ -231,6 +229,8 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             // before either operator file is replaced and restored on persistence failure.
             persistCommittedMigrations(configCandidate, messageCandidate);
             runtimeGeneration = nextGeneration;
+            runtimeFailure = null;
+            publishRuntimeHealth("reload committed");
         } catch (RuntimeException failure) {
             try {
                 messages.apply(previousMessages);
@@ -240,12 +240,14 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
                 if (coreBridge != null && coreBridge.core() != null) {
                     coreBridge.refreshCapabilities(previousConfig,
                             "generation=" + previousGeneration + "; previous runtime restored after rejected reload");
-                    coreBridge.degraded("Reload rejected; previous generation "
-                            + previousGeneration + " restored: " + detail(failure));
+                    runtimeFailure = "Reload rejected; previous generation "
+                            + previousGeneration + " restored: " + detail(failure);
+                    publishRuntimeHealth("reload rollback");
                 }
             } catch (RuntimeException rollbackFailure) {
                 failure.addSuppressed(rollbackFailure);
-                if (coreBridge != null) coreBridge.degraded("Reload rollback failed: " + detail(rollbackFailure));
+                runtimeFailure = "Reload rollback failed: " + detail(rollbackFailure);
+                if (coreBridge != null) coreBridge.degraded(runtimeFailure);
             }
             throw failure;
         }
@@ -284,10 +286,51 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
         }
     }
 
+    private void onAdminDataHealthChanged(AdminDataStore.PersistenceStatus status) {
+        if (runtimeGeneration <= 0L || status == null) return;
+        publishRuntimeHealth("admin-data " + status.health().name().toLowerCase(java.util.Locale.ROOT));
+    }
+
+    private synchronized void publishRuntimeHealth(String context) {
+        if (coreBridge == null || coreBridge.core() == null || runtimeGeneration <= 0L) return;
+
+        AdminDataStore.PersistenceStatus persistence = adminData == null ? null : adminData.status();
+        boolean afkExpected = utilityConfig != null
+                && utilityConfig.enabled(Feature.AFK)
+                && utilityConfig.afk().autoTimeoutEnabled();
+        int afkTasks = afkManager == null ? 0 : afkManager.schedulerCount();
+        boolean afkHealthy = !afkExpected || afkTasks == 1;
+
+        String persistenceDetail = persistence == null
+                ? "unavailable"
+                : persistence.health().name() + "/dirty=" + persistence.dirty()
+                        + "/pending=" + persistence.pendingWrites()
+                        + "/rev=" + persistence.persistedRevision() + "/" + persistence.currentRevision();
+        String detail = "generation=" + runtimeGeneration
+                + "; context=" + context
+                + "; afk-scheduler=" + afkTasks + (afkExpected ? "/expected=1" : "/expected=0")
+                + "; admin-data=" + persistenceDetail
+                + "; synthetic-presence=" + (vanishService == null ? "unavailable" : vanishService.syntheticPresenceMode())
+                + "; family-ready=" + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
+                + "; enabled features=" + (utilityConfig == null ? Set.of() : utilityConfig.enabledFeatures());
+
+        boolean persistenceFailed = persistence != null
+                && persistence.health() == AdminDataStore.HealthState.DEGRADED;
+        if (runtimeFailure != null || persistenceFailed || !afkHealthy) {
+            String reason = runtimeFailure == null ? detail : runtimeFailure + "; " + detail;
+            coreBridge.degraded(reason);
+        } else {
+            coreBridge.ready(detail);
+        }
+    }
+
     public UtilityConfig utilityConfig() { return utilityConfig; }
     public PlexonCoreAPI core() { return coreBridge == null ? null : coreBridge.core(); }
     public boolean placeholderRegistered() { return placeholderExpansion != null; }
     public long runtimeGeneration() { return runtimeGeneration; }
+    public AdminDataStore.PersistenceStatus adminDataStatus() {
+        return adminData == null ? null : adminData.status();
+    }
 
     private void registerPlaceholderExpansion() {
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") == null) return;
