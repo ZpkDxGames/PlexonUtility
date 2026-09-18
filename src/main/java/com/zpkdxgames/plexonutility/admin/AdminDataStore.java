@@ -22,6 +22,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Consumer;
 
 /**
  * Runtime admin state kept separate from human-authored config.yml.
@@ -38,6 +39,7 @@ public final class AdminDataStore implements AutoCloseable {
     private final JavaPlugin plugin;
     private final CoreScheduler scheduler;
     private final File file;
+    private final Consumer<PersistenceStatus> healthListener;
     private volatile Snapshot snapshot = Snapshot.empty();
 
     private CompletableFuture<Void> pendingWrite = CompletableFuture.completedFuture(null);
@@ -51,8 +53,14 @@ public final class AdminDataStore implements AutoCloseable {
     private boolean closed;
 
     public AdminDataStore(JavaPlugin plugin, CoreScheduler scheduler) {
+        this(plugin, scheduler, ignored -> { });
+    }
+
+    public AdminDataStore(JavaPlugin plugin, CoreScheduler scheduler,
+                          Consumer<PersistenceStatus> healthListener) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
+        this.healthListener = Objects.requireNonNull(healthListener, "healthListener");
         this.file = new File(plugin.getDataFolder(), "admin-data.yml");
     }
 
@@ -62,6 +70,7 @@ public final class AdminDataStore implements AutoCloseable {
             currentRevision = 0L;
             persistedRevision = 0L;
             health = HealthState.READY;
+            notifyHealth();
             return;
         }
 
@@ -96,6 +105,8 @@ public final class AdminDataStore implements AutoCloseable {
             health = HealthState.DIRTY;
             scheduleWrite(currentRevision, snapshot);
             plugin.getLogger().info("Scheduled admin-data.yml schema migration 1 -> " + SCHEMA_VERSION + ".");
+        } else {
+            notifyHealth();
         }
     }
 
@@ -183,6 +194,7 @@ public final class AdminDataStore implements AutoCloseable {
                     observed.complete(new PersistenceResult(revision, false, lastFailure));
                 }
             }
+            notifyHealth();
         });
         return observed;
     }
@@ -310,6 +322,15 @@ public final class AdminDataStore implements AutoCloseable {
             throw new IllegalArgumentException("admin-data.yml " + path + " must be finite");
         }
         return value;
+    }
+
+    private void notifyHealth() {
+        PersistenceStatus current = status();
+        try {
+            healthListener.accept(current);
+        } catch (RuntimeException exception) {
+            plugin.getLogger().warning("AdminDataStore health listener failed: " + rootMessage(exception));
+        }
     }
 
     private static String rootMessage(Throwable throwable) {
