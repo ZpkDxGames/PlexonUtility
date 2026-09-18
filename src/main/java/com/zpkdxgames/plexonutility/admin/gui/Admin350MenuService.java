@@ -322,13 +322,21 @@ public final class Admin350MenuService {
         if (!requireFeature(actor, config.get().admin().entityManagement().enabled()
                 && config.get().admin().entityManagement().killall().enabled(), "plexonutility.admin.killall")) return;
         EntityCleanupService.Query query = plan.query();
-        EntityCleanupService.Result result = cleanup.execute(actor, plan);
-        messages.send(actor, "admin-killall-success", Map.of(
-                "count", Integer.toString(result.removed()),
-                "protected", Integer.toString(result.protectedCount()),
-                "selector", query.selection().canonical(),
-                "world", query.world().getName()));
-        openEntityManagement(actor);
+        cleanup.executeBatched(actor, plan).whenComplete((result, error) ->
+                scheduler.runPrimary(() -> {
+                    if (!actor.isOnline() || !actor.isConnected()) return;
+                    if (error != null) {
+                        messages.send(actor, "admin-killall-confirm-expired");
+                        openEntityManagement(actor);
+                        return;
+                    }
+                    messages.send(actor, "admin-killall-success", Map.of(
+                            "count", Integer.toString(result.removed()),
+                            "protected", Integer.toString(result.protectedCount()),
+                            "selector", query.selection().canonical(),
+                            "world", query.world().getName()));
+                    openEntityManagement(actor);
+                }));
     }
 
     private void openSpawnDialog(Player actor) {
