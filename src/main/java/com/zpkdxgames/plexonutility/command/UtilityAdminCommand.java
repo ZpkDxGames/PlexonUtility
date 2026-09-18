@@ -103,6 +103,7 @@ public final class UtilityAdminCommand implements CommandExecutor {
         messages.sendRaw(sender, "<gray>Plugin:</gray> <white><version></white>", Map.of("version", plugin.getPluginMeta().getVersion()));
         messages.sendRaw(sender, "<gray>Core:</gray> <white><core></white>", Map.of("core", core == null ? "UNAVAILABLE" : core.version().pluginVersion() + " / API " + core.version().apiVersion()));
         messages.sendRaw(sender, "<gray>Module:</gray> <white><state></white>", Map.of("state", core == null ? "UNAVAILABLE" : core.modules().find("utility").map(view -> view.state().name()).orElse("MISSING")));
+        messages.sendRaw(sender, "<gray>Runtime generation:</gray> <white><generation></white>", Map.of("generation", plugin.runtimeGeneration()));
         for (Feature feature : Feature.values()) {
             messages.sendRaw(sender, "<dark_gray>•</dark_gray> <gray><feature>:</gray> <state>", Map.of(
                     "feature", feature.id(), "state", cfg.enabled(feature) ? "ENABLED" : "DISABLED"));
@@ -124,6 +125,22 @@ public final class UtilityAdminCommand implements CommandExecutor {
         messages.sendRaw(sender, "<gray>Quiet self success:</gray> <white><state></white>", Map.of("state", cfg.feedback().utilitySuccessActionbar() ? "ACTIONBAR" : "CHAT"));
         messages.sendRaw(sender, "<gray>AFK state persistence:</gray> <white>EPHEMERAL</white>");
         messages.sendRaw(sender, "<gray>God state persistence:</gray> <white>EPHEMERAL</white>");
+        messages.sendRaw(sender, "<gray>Flight ownership marker:</gray> <white>PLAYER_PDC</white>");
+        var adminData = plugin.adminDataStatus();
+        if (adminData != null) {
+            messages.sendRaw(sender,
+                    "<gray>Admin data:</gray> <white><health></white> <dark_gray>•</dark_gray> <gray>rev:</gray> <white><persisted>/<current></white> <dark_gray>•</dark_gray> <gray>pending:</gray> <white><pending></white> <dark_gray>•</dark_gray> <gray>retries:</gray> <white><retries></white>",
+                    Map.of(
+                            "health", adminData.health().name(),
+                            "persisted", adminData.persistedRevision(),
+                            "current", adminData.currentRevision(),
+                            "pending", adminData.pendingWrites(),
+                            "retries", adminData.retryCount()));
+            if (adminData.lastFailure() != null) {
+                messages.sendRaw(sender, "<gray>Admin data last failure:</gray> <red><failure></red>",
+                        Map.of("failure", adminData.lastFailure()));
+            }
+        }
         messages.sendRaw(sender, "<gray>PlaceholderAPI:</gray> <white><state></white>", Map.of("state", plugin.placeholderRegistered() ? "REGISTERED" : "UNAVAILABLE"));
         messages.sendRaw(sender, "<gray>PlexonFamily integrations:</gray> <white><ready>/<total></white>", Map.of("ready", family.readyCount(), "total", family.totalCount()));
         messages.sendRaw(sender, "<gray>PlexonHomes:</gray> <white><state></white>", Map.of("state", family.ready("PLEXON_HOMES") ? "READY" : "MISSING"));
