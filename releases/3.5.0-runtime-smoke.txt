@@ -6,9 +6,9 @@ plexoncore_sha256=7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f757
 candidate_jar_sha256=00ebac64d07024b4ffa99113ac3e4ba0edf05383fdfd7dd3f95b321d4346585c
 implementation_commit=0d73a9232db4bc3c1f989245cc7f889e02f3f74a
 certified_at=PENDING
-ci_workflow_run=PENDING
-ci_artifact_id=PENDING
-ci_artifact_zip_sha256=PENDING
+ci_workflow_run=35392167055
+ci_artifact_id=10566309101
+ci_artifact_zip_sha256=d360cd88c986f742d114d61d53c47ed8c09cc9b81e3b0800ab85f5cde9d0198a
 candidate_jar_size=320124
 environment=PENDING
 
@@ -31,4 +31,4 @@ spark_result=PENDING
 spark_evidence=PENDING
 essentials_decommission=PENDING
 
-notes=Source implementation is frozen at main commit 0d73a9232db4bc3c1f989245cc7f889e02f3f74a. Runtime certification is still PENDING. Only this evidence file may change before stable publication.
+notes=Exact runtime candidate is frozen from certification PR CI run 35392167055 / artifact 10566309101. Runtime certification remains PENDING. Only this evidence file may change before stable publication.
