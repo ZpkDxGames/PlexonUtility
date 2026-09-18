@@ -217,26 +217,32 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             utilityConfig = candidateConfig;
             reloadGenerationServices();
 
+            long nextGeneration = previousGeneration + 1L;
+            if (coreBridge != null && coreBridge.core() != null) {
+                coreBridge.refreshCapabilities(candidateConfig,
+                        "generation=" + nextGeneration
+                                + "; Reloaded; admin-toolkit=" + candidateConfig.admin().enabled()
+                                + "; synthetic-presence=" + (vanishService == null ? "unavailable" : vanishService.syntheticPresenceMode())
+                                + "; family-ready=" + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
+                                + "; enabled features: " + candidateConfig.enabledFeatures());
+            }
+
             // Disk migration is part of the successful generation commit. Both files are staged
             // before either operator file is replaced and restored on persistence failure.
             persistCommittedMigrations(configCandidate, messageCandidate);
-            runtimeGeneration = previousGeneration + 1L;
-
-            if (coreBridge != null && coreBridge.core() != null) {
-                coreBridge.ready("generation=" + runtimeGeneration
-                        + "; Reloaded; admin-toolkit=" + candidateConfig.admin().enabled()
-                        + "; synthetic-presence=" + (vanishService == null ? "unavailable" : vanishService.syntheticPresenceMode())
-                        + "; family-ready=" + (family == null ? "0/0" : family.readyCount() + "/" + family.totalCount())
-                        + "; enabled features: " + candidateConfig.enabledFeatures());
-            }
+            runtimeGeneration = nextGeneration;
         } catch (RuntimeException failure) {
             try {
                 messages.apply(previousMessages);
                 utilityConfig = previousConfig;
                 reloadGenerationServices();
                 runtimeGeneration = previousGeneration;
-                if (coreBridge != null) coreBridge.degraded("Reload rejected; previous generation "
-                        + previousGeneration + " restored: " + detail(failure));
+                if (coreBridge != null && coreBridge.core() != null) {
+                    coreBridge.refreshCapabilities(previousConfig,
+                            "generation=" + previousGeneration + "; previous runtime restored after rejected reload");
+                    coreBridge.degraded("Reload rejected; previous generation "
+                            + previousGeneration + " restored: " + detail(failure));
+                }
             } catch (RuntimeException rollbackFailure) {
                 failure.addSuppressed(rollbackFailure);
                 if (coreBridge != null) coreBridge.degraded("Reload rollback failed: " + detail(rollbackFailure));
