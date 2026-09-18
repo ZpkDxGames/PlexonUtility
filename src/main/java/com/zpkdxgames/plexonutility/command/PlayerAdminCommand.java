@@ -17,13 +17,18 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /** Permission-separated command layer for common player administration. */
 public final class PlayerAdminCommand implements TabExecutor {
+    private static final long CLEAR_CONFIRM_TTL_NANOS = TimeUnit.SECONDS.toNanos(15);
     private final Supplier<UtilityConfig> config;
     private final MessageService messages;
     private final PlayerManagementService players;
+    private final TimedConfirmationStore<ClearInventoryPlan> clearPending =
+            new TimedConfirmationStore<>(CLEAR_CONFIRM_TTL_NANOS, System::nanoTime);
 
     public PlayerAdminCommand(Supplier<UtilityConfig> config, MessageService messages, PlayerManagementService players) {
         this.config = Objects.requireNonNull(config, "config");
@@ -149,12 +154,60 @@ public final class PlayerAdminCommand implements TabExecutor {
     private boolean clearInventory(CommandSender sender, String[] args) {
         if (!feature(sender, config.get().admin().playerManagement().clearInventoryEnabled(), "plexonutility.admin.clearinventory")) return true;
         if (args.length > 1) return false;
+        if (args.length == 1 && args[0].equalsIgnoreCase("confirm")) return confirmClearInventory(sender);
+
         Player target = target(sender, args.length == 1 ? args[0] : null, "plexonutility.admin.clearinventory.others");
         if (target == null) return true;
+
+        if (sender instanceof Player player && player.getUniqueId().equals(target.getUniqueId())) {
+            sendClearResult(sender, target);
+            return true;
+        }
+
+        ClearInventoryPlan plan = new ClearInventoryPlan(
+                target.getUniqueId(), players.inventoryFingerprint(target), players.occupiedStacks(target));
+        clearPending.put(actorKey(sender), plan);
+        messages.send(sender, "admin-clearinventory-confirm", Map.of(
+                "player", target.getName(),
+                "count", Integer.toString(plan.occupiedStacks()),
+                "seconds", "15"));
+        return true;
+    }
+
+    private boolean confirmClearInventory(CommandSender sender) {
+        ClearInventoryPlan plan = clearPending.consume(actorKey(sender)).orElse(null);
+        if (plan == null) {
+            messages.send(sender, "admin-clearinventory-confirm-expired");
+            return true;
+        }
+        Player target = Bukkit.getPlayer(plan.targetId());
+        if (target == null || !target.isOnline() || !target.isConnected()) {
+            messages.send(sender, "admin-target-offline");
+            return true;
+        }
+        if (!sender.hasPermission("plexonutility.admin.clearinventory.others")) {
+            messages.send(sender, "no-permission");
+            return true;
+        }
+        int currentFingerprint = players.inventoryFingerprint(target);
+        if (currentFingerprint != plan.fingerprint()) {
+            ClearInventoryPlan refreshed = new ClearInventoryPlan(
+                    target.getUniqueId(), currentFingerprint, players.occupiedStacks(target));
+            clearPending.put(actorKey(sender), refreshed);
+            messages.send(sender, "admin-clearinventory-changed", Map.of(
+                    "player", target.getName(),
+                    "count", Integer.toString(refreshed.occupiedStacks()),
+                    "seconds", "15"));
+            return true;
+        }
+        sendClearResult(sender, target);
+        return true;
+    }
+
+    private void sendClearResult(CommandSender sender, Player target) {
         int stacks = players.clearInventory(sender, target);
         messages.send(sender, "admin-clearinventory-success", Map.of(
                 "player", target.getName(), "count", Integer.toString(stacks)));
-        return true;
     }
 
     private boolean anvil(CommandSender sender, String[] args) {
@@ -263,4 +316,11 @@ public final class PlayerAdminCommand implements TabExecutor {
         for (String value : source) if (value.toLowerCase(Locale.ROOT).startsWith(lower)) result.add(value);
         return result;
     }
+
+    private static String actorKey(CommandSender sender) {
+        if (sender instanceof Player player) return "player:" + player.getUniqueId();
+        return "sender:" + sender.getName().toLowerCase(Locale.ROOT);
+    }
+
+    private record ClearInventoryPlan(UUID targetId, int fingerprint, int occupiedStacks) { }
 }
