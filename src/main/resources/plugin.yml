@@ -8,6 +8,7 @@ softdepend:
   - PlaceholderAPI
   - PlexonHomes
   - PlexonChats
+  - WildStacker
 loadbefore:
   - Essentials
 commands:
