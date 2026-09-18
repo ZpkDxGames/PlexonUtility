@@ -110,7 +110,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             AdminAuditService audit = new AdminAuditService(getLogger());
             SyntheticPresenceBridge syntheticPresence = new SyntheticPresenceBridge(this, this::utilityConfig, core.text());
             vanishService = new VanishService(this, this::utilityConfig, adminData, audit, syntheticPresence);
-            playerManagement = new PlayerManagementService(this::utilityConfig, audit);
+            playerManagement = new PlayerManagementService(this, this::utilityConfig, audit, core.scheduler());
             EntityCleanupService entityCleanup = new EntityCleanupService(this::utilityConfig, audit);
             EntitySpawnService entitySpawn = new EntitySpawnService(this::utilityConfig, audit);
             ModerationService moderation = new ModerationService(messages, audit);
@@ -154,6 +154,7 @@ public final class PlexonUtilityPlugin extends JavaPlugin implements Listener {
             getServer().getPluginManager().registerEvents(new VanishListener(this::utilityConfig, vanishService), this);
             getServer().getPluginManager().registerEvents(inventory, this);
             getServer().getPluginManager().registerEvents(playerManagement, this);
+            playerManagement.start();
             afkManager.start();
             registerPlaceholderExpansion();
 
