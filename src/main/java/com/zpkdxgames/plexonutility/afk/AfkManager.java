@@ -130,14 +130,11 @@ public final class AfkManager implements Listener, AutoCloseable {
 
     private void asyncActivity(Player player) {
         if (!config.get().enabled(Feature.AFK)) return;
-        AfkTracker.Transition transition = tracker.activity(player.getUniqueId());
-        if (transition != AfkTracker.Transition.NONE) {
-            coreScheduler.runPrimary(() -> {
-                if (plugin.isEnabled()) {
-                    notifyTransition(player, transition, AfkStateChangeEvent.Reason.ACTIVITY);
-                }
-            });
-        }
+        coreScheduler.runPrimary(() -> {
+            if (plugin.isEnabled() && player.isOnline()) {
+                activity(player);
+            }
+        });
     }
 
     private void notifyTransition(Player player, AfkTracker.Transition transition, AfkStateChangeEvent.Reason reason) {
@@ -205,8 +202,9 @@ public final class AfkManager implements Listener, AutoCloseable {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDamage(EntityDamageEvent event) {
         if (!config.get().afk().resetOnDamage()) return;
-        if (event.getEntity() instanceof Player player) activity(player);
-        if (event instanceof EntityDamageByEntityEvent byEntity && byEntity.getDamager() instanceof Player attacker) activity(attacker);
+        if (event instanceof EntityDamageByEntityEvent byEntity && byEntity.getDamager() instanceof Player attacker) {
+            activity(attacker);
+        }
     }
 
     static boolean meaningfulMovement(Location from, Location to) {
