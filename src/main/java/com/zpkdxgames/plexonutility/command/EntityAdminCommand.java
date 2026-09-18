@@ -207,15 +207,17 @@ public final class EntityAdminCommand implements TabExecutor {
             return true;
         }
 
-        spawning.spawnBatched(sender, player, type, amount).whenComplete((result, error) -> {
+        final EntityType requestedType = type;
+        final int requestedAmount = amount;
+        spawning.spawnBatched(sender, player, requestedType, requestedAmount).whenComplete((result, error) -> {
             if (error != null) {
                 messages.send(sender, "admin-spawnmob-partial", Map.of(
-                        "spawned", "0", "requested", Integer.toString(amount),
-                        "failed", Integer.toString(amount),
-                        "type", type.name().toLowerCase(Locale.ROOT)));
+                        "spawned", "0", "requested", Integer.toString(requestedAmount),
+                        "failed", Integer.toString(requestedAmount),
+                        "type", requestedType.name().toLowerCase(Locale.ROOT)));
                 return;
             }
-            sendSpawnResult(sender, type, result);
+            sendSpawnResult(sender, requestedType, result);
         });
         return true;
     }
