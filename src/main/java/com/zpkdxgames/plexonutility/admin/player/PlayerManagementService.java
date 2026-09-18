@@ -94,6 +94,21 @@ public final class PlayerManagementService implements Listener {
         return value;
     }
 
+    public int occupiedStacks(Player target) {
+        PlayerInventory inventory = target.getInventory();
+        int count = countStacks(inventory.getStorageContents()) + countStacks(inventory.getArmorContents());
+        if (!empty(inventory.getItemInOffHand())) count++;
+        return count;
+    }
+
+    public int inventoryFingerprint(Player target) {
+        PlayerInventory inventory = target.getInventory();
+        int hash = java.util.Arrays.hashCode(inventory.getStorageContents());
+        hash = 31 * hash + java.util.Arrays.hashCode(inventory.getArmorContents());
+        hash = 31 * hash + Objects.hashCode(inventory.getItemInOffHand());
+        return hash;
+    }
+
     public int clearInventory(CommandSender actor, Player target) {
         PlayerInventory inventory = target.getInventory();
         int cleared = countStacks(inventory.getStorageContents()) + countStacks(inventory.getArmorContents());
