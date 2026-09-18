@@ -375,18 +375,32 @@ public final class Admin350MenuService {
             messages.send(actor, "admin-spawnmob-invalid-amount", Map.of("amount", Integer.toString(amount), "max", Integer.toString(max)));
             return;
         }
-        EntitySpawnService.SpawnResult result = spawning.spawn(actor, actor, type, amount);
-        if (result.location() == null) {
-            messages.send(actor, "admin-spawnmob-no-safe-location");
-        } else if (result.failed() > 0) {
-            messages.send(actor, "admin-spawnmob-partial", Map.of(
-                    "spawned", Integer.toString(result.spawned()), "requested", Integer.toString(result.requested()),
-                    "failed", Integer.toString(result.failed()), "type", type.name().toLowerCase(Locale.ROOT)));
-        } else {
-            messages.send(actor, "admin-spawnmob-success", Map.of(
-                    "count", Integer.toString(result.spawned()), "type", type.name().toLowerCase(Locale.ROOT)));
-        }
-        openEntityManagement(actor);
+        spawning.spawnBatched(actor, actor, type, amount).whenComplete((result, error) ->
+                scheduler.runPrimary(() -> {
+                    if (!actor.isOnline() || !actor.isConnected()) return;
+                    if (error != null) {
+                        messages.send(actor, "admin-spawnmob-partial", Map.of(
+                                "spawned", "0", "requested", Integer.toString(amount),
+                                "failed", Integer.toString(amount),
+                                "type", type.name().toLowerCase(Locale.ROOT)));
+                        openEntityManagement(actor);
+                        return;
+                    }
+                    if (result.location() == null) {
+                        messages.send(actor, "admin-spawnmob-no-safe-location");
+                    } else if (result.failed() > 0) {
+                        messages.send(actor, "admin-spawnmob-partial", Map.of(
+                                "spawned", Integer.toString(result.spawned()),
+                                "requested", Integer.toString(result.requested()),
+                                "failed", Integer.toString(result.failed()),
+                                "type", type.name().toLowerCase(Locale.ROOT)));
+                    } else {
+                        messages.send(actor, "admin-spawnmob-success", Map.of(
+                                "count", Integer.toString(result.spawned()),
+                                "type", type.name().toLowerCase(Locale.ROOT)));
+                    }
+                    openEntityManagement(actor);
+                }));
     }
 
     private void setGameMode(Player actor, UUID targetId, GameMode mode) {
