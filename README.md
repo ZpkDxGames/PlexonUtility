@@ -141,7 +141,7 @@ God mode and Utility-managed flight are intentionally runtime-ephemeral. `admin.
 
 - Java 25
 - Paper 26.2
-- PlexonCore 2.0.5
+- PlexonCore 2.1.0
 - no new permanent 3.5 scheduler/poller
 - one existing shared AFK timeout scan only when automatic AFK is enabled
 - no per-entity task fan-out
@@ -173,7 +173,7 @@ plexonutility.anvil
 
 ## Build and release
 
-Canonical source verification provisions the pinned PlexonCore 2.0.5 artifact and runs:
+Canonical source verification provisions the pinned PlexonCore 2.1.0 artifact and runs:
 
 ```bash
 mvn -B -ntp clean verify
