@@ -15,6 +15,7 @@ class Utility350ConfigTest {
         assertTrue(config.admin().entityManagement().killall().enabled());
         assertEquals(512, config.admin().entityManagement().killall().maxRadius());
         assertEquals(250, config.admin().entityManagement().killall().confirmationThreshold());
+        assertEquals(10_000, config.admin().entityManagement().killall().maxCandidates());
         assertEquals(100, config.admin().entityManagement().spawnmob().maxAmount());
         assertTrue(config.admin().playerManagement().gamemodeEnabled());
         assertTrue(config.admin().playerManagement().anvilEnabled());
@@ -38,6 +39,12 @@ class Utility350ConfigTest {
     @Test void invalidCleanupRadiusIsRejected() {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("admin.entity-management.killall.max-radius", -1);
+        assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
+    }
+
+    @Test void invalidCleanupCandidateCeilingIsRejected() {
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("admin.entity-management.killall.max-candidates", 100_001);
         assertThrows(IllegalArgumentException.class, () -> UtilityConfig.from(yaml));
     }
 
