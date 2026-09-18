@@ -1,5 +1,6 @@
 package com.zpkdxgames.plexonutility.admin.entity;
 
+import com.zpkdxgames.plexoncore.scheduler.CoreScheduler;
 import com.zpkdxgames.plexonutility.admin.AdminAuditService;
 import com.zpkdxgames.plexonutility.config.UtilityConfig;
 import org.bukkit.Location;
@@ -14,17 +15,25 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Villager;
 import org.bukkit.entity.Wither;
 import org.bukkit.entity.Wolf;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 class EntityCleanupServiceTest {
@@ -127,6 +136,58 @@ class EntityCleanupServiceTest {
         assertEquals(2, error.observed());
         verify(first, never()).remove();
         verify(second, never()).remove();
+    }
+
+    @Test void largeConfirmedPlanProcessesAtMostFortyCandidatesBeforeContinuation() {
+        UtilityConfig config = UtilityConfig.from(new YamlConfiguration());
+        JavaPlugin plugin = mock(JavaPlugin.class);
+        when(plugin.isEnabled()).thenReturn(true);
+        CoreScheduler scheduler = mock(CoreScheduler.class);
+        AtomicReference<Runnable> continuation = new AtomicReference<>();
+        when(scheduler.schedulePrimaryObserved(eq(plugin), any(Duration.class), any(Runnable.class)))
+                .thenAnswer(invocation -> {
+                    continuation.set(invocation.getArgument(2));
+                    return new CoreScheduler.ObservedTaskHandle(
+                            new CoreScheduler.TaskHandle(() -> { }, () -> false),
+                            new CompletableFuture<>());
+                });
+
+        World world = mock(World.class);
+        when(world.getName()).thenReturn("Survival_World");
+        LinkedHashSet<UUID> ids = new LinkedHashSet<>();
+        java.util.Map<UUID, Monster> entities = new java.util.LinkedHashMap<>();
+        for (int index = 0; index < 45; index++) {
+            UUID id = UUID.randomUUID();
+            Monster entity = mock(Monster.class);
+            entity(entity, EntityType.ZOMBIE);
+            when(entity.isValid()).thenReturn(true);
+            when(entity.getWorld()).thenReturn(world);
+            ids.add(id);
+            entities.put(id, entity);
+            when(world.getEntity(id)).thenReturn(entity);
+        }
+
+        EntityCleanupService service = new EntityCleanupService(
+                plugin, scheduler, () -> config, mock(AdminAuditService.class));
+        EntityCleanupService.Query query =
+                new EntityCleanupService.Query(EntitySelector.parse("zombie"), world, null, null);
+        EntityCleanupService.Plan plan = new EntityCleanupService.Plan(query, ids, 45, 0);
+
+        CompletableFuture<EntityCleanupService.Result> result = service.executeBatched(mock(Player.class), plan);
+
+        long initiallyRemoved = entities.values().stream()
+                .filter(entity -> org.mockito.Mockito.mockingDetails(entity)
+                        .getInvocations().stream().anyMatch(invocation -> invocation.getMethod().getName().equals("remove")))
+                .count();
+        assertEquals(EntityCleanupService.MAX_REMOVALS_PER_TICK, initiallyRemoved);
+        assertFalse(result.isDone());
+        assertTrue(continuation.get() != null);
+
+        continuation.get().run();
+
+        assertEquals(45, result.join().removed());
+        assertEquals(45, result.join().logicalRemoved());
+        for (Monster entity : entities.values()) verify(entity, times(1)).remove();
     }
 
     @Test void radiusUsesSphericalFilteringInsideConfiguredWorld() {
