@@ -147,34 +147,27 @@ Public surfaces include:
 
 ## Build and release
 
-Canonical verification provisions the exact PlexonCore 2.1.0 JAR and validates its SHA-256:
+PlexonUtility uses a **final-only stable release model**. The published version is a full semantic version such as `3.5.0`; the project does not use RC, preview, snapshot, or pre-candidate release artifacts for this line.
+
+Canonical verification provisions the exact PlexonCore 2.1.0 JAR and validates SHA-256:
 
 `7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c`
 
-Then CI runs:
+Source CI runs:
 
 ```bash
 mvn -B -ntp clean verify
 ```
 
-Distribution verification checks Java class major 69, Paper 26.2 metadata, required public/admin classes, WildStacker optional integration, provided-API isolation, all discovered tests, and confirms PlexonUtility does not register root `/spawn`.
+The full stable publication workflow additionally verifies Java class major 69, Paper 26.2 metadata, required public/admin classes, WildStacker optional integration, provided-API isolation, command ownership, and that PlexonUtility does not register root `/spawn`.
 
-Stable publication remains intentionally blocked until the full live matrix in `docs/RUNTIME_CERTIFICATION_3.5.0.md` passes and real staging evidence exists in `releases/3.5.0-runtime-smoke.txt` with:
+Before publishing `v3.5.0`, the workflow performs **two clean builds from the same accepted `main` SHA** and requires byte-for-byte JAR equality and identical SHA-256. A mismatch fails publication.
 
-```text
-result=PASS
-paper=26.2.build.121-stable
-java=25
-plexoncore=2.1.0
-plexoncore_sha256=7ee823ded87d5be9c62426b04571c0d0d6b11c138575ca2c91838586c9f7576c
-candidate_jar_sha256=<exact tested PlexonUtility JAR>
-```
-
-The release workflow rebuilds deterministically and refuses publication if its JAR hash differs from the runtime-certified candidate.
-
-Stable assets, once certified:
+Published stable assets:
 
 - `PlexonUtility-3.5.0.jar`
 - `SHA256SUMS.txt`
 - `TEST_SUMMARY.txt`
 - `PROVENANCE.txt`
+
+Live-server checks remain useful operational validation after release. They are tracked separately in `docs/POST_RELEASE_RUNTIME_VALIDATION_3.5.0.md` and do not create another release channel or prerelease artifact.
