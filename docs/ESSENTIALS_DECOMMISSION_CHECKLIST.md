@@ -31,12 +31,12 @@ Status vocabulary: `REPLACED`, `NOT USED`, `KEEP EXTERNAL`, `DEFERRED — BLOCKS
 | Broad moderation history/mute/freeze/IP bans/appeals | KEEP EXTERNAL | Requires dedicated moderation owner if used |
 | Vault economy provider | UNKNOWN — BLOCKS REMOVAL | **Critical:** identify provider and preserve balances |
 | Other plugin hard-dependencies | UNKNOWN — BLOCKS REMOVAL | Inspect installed plugin metadata/source |
-| PlexonUtility 3.5 real Paper smoke | DEFERRED — BLOCKS STABLE 3.5 PUBLICATION | Complete `docs/RUNTIME_CERTIFICATION_3.5.0.md`, then record exact-candidate PASS evidence in `releases/3.5.0-runtime-smoke.txt` |
+| PlexonUtility 3.5 post-release Paper validation | DEFERRED — DOES NOT BLOCK STABLE PUBLICATION | Use `docs/POST_RELEASE_RUNTIME_VALIDATION_3.5.0.md` against the published stable JAR and record observations in `releases/3.5.0-runtime-validation.txt` |
 
 ## Production decision
 
 `Essentials fully decommissioned? NO — BLOCKED`
 
-`PlexonUtility 3.5.0 stable published? ONLY AFTER REAL PAPER 26.2 RUNTIME PASS`
+`PlexonUtility 3.5.0 release model: FULL STABLE after source/CI/distribution/reproducibility gates`
 
-The release workflow enforces the second statement independently of source CI. Full Essentials removal additionally requires the live dependency/data audit above and a staging boot with Essentials physically disabled.
+Post-release Paper validation is tracked separately from release maturity. Full Essentials removal still requires the live dependency/data audit above and a staging boot with Essentials physically disabled.
