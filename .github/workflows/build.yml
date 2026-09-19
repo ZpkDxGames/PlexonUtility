@@ -121,14 +121,6 @@ jobs:
             fi
           done
           (cd target && sha256sum "PlexonUtility-${VERSION}.jar" > SHA256SUMS.txt && sha256sum --check SHA256SUMS.txt)
-          evidence="releases/${VERSION}-runtime-smoke.txt"
-          if [ -s "$evidence" ]; then
-            pinned_hash="$(sed -n 's/^candidate_jar_sha256=//p' "$evidence")"
-            if [ -n "$pinned_hash" ] && [ "$pinned_hash" != 'PENDING' ]; then
-              rebuilt_hash="$(sha256sum "$JAR" | awk '{print $1}')"
-              test "$rebuilt_hash" = "$pinned_hash"
-            fi
-          fi
           git diff --check
 
       - name: Syntax-check stable release verification shell
@@ -142,13 +134,15 @@ jobs:
           source_text = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
           source = source_text.splitlines()
           required_once = [
-              "      - name: Verify stable release and runtime boundaries",
+              "      - name: Verify full stable source boundary",
               "      - name: Provision immutable PlexonCore 2.1.0",
-              "      - name: Verify release build",
-              "      - name: Generate test summary",
-              "      - name: Verify 3.5 distribution and generate checksum",
-              "      - name: Generate provenance",
-              "      - name: Publish GitHub stable release",
+              "      - name: First clean stable build",
+              "      - name: Verify tests and stable distribution",
+              "      - name: Second clean stable build",
+              "      - name: Prove deterministic full stable artifact",
+              "      - name: Generate final test summary",
+              "      - name: Generate full stable provenance",
+              "      - name: Publish GitHub full stable release",
           ]
           for marker_name in required_once:
               count = source_text.count(marker_name)

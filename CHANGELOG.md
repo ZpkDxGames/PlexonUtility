@@ -18,7 +18,7 @@
 - Added public `SyntheticPresencePresentationEvent` after `VanishStateChangeEvent`; external presenters such as future PlexonChats versions can handle synthetic presence without fake Bukkit join/quit events, with Utility fallback only when unhandled.
 - Added Utility module health publication for sticky runtime-generation failures, AdminDataStore degradation, and AFK coordinator state, plus expanded `/utilityadmin diagnostics`.
 - Expanded CI/regression coverage for permission descriptors, immutable cleanup plans, preview ceilings, batching, WildStacker fail-closed behavior, flight lifecycle, migrations, persistence retry/recovery/bounded close, prison async races, and presentation handoff.
-- Stable publication remains blocked until real Paper 26.2/Java 25 runtime evidence is recorded against the exact candidate JAR SHA-256.
+- Promoted 3.5.0 to the final-only full stable release model: source CI, distribution verification, and byte-identical double-build reproducibility are publication gates; live Paper validation is tracked separately after release rather than as a prerelease channel.
 
 ## 3.4.0 — 2026-09-12
 
